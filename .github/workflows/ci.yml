@@ -29,10 +29,6 @@ jobs:
           7z x cef_win32.tar/cef_win32.tar
           7z x cef_win32_x86.tar.bz2 -o"cef_win32_x86.tar"
           7z x cef_win32_x86.tar/cef_win32_x86.tar
-          rm cef_win32.tar.bz2
-          rm cef_win32.tar
-          rm cef_win32_x86.tar.bz2
-          rm cef_win32_x86.tar
           ls
           ls cef_win32
           ls cef_win32_x86
