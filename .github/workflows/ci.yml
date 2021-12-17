@@ -57,7 +57,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: build --features genJava --release --manifest-path ./chromium-library/chromium_subp/Cargo.toml
+          args: --features genJava --release --manifest-path ./chromium-library/chromium_subp/Cargo.toml
 
       - name: Generate Java CEF Bindings (Java format)
         run: |
