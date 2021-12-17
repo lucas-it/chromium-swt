@@ -62,6 +62,8 @@ jobs:
       - name: Generate Java CEF Bindings (Java format)
         run: |
           cd chromium-library
+          ls
+          ls chromium_subp/target
           java -jar google-java-format-all-deps.jar --replace ./chromium_subp/target/CEF.java
           mkdir ../com.equo.swt.chromium/bin/org/eclipse/swt/internal/chromium
           cp ./chromium_subp/target/CEF.java ../com.equo.swt.chromium/bin/org/eclipse/swt/internal/chromium
