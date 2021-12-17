@@ -31,7 +31,7 @@ jobs:
           echo "---------------"
           dir ./cef_win32
           echo "---------------"
-          dir ./cef_win32_x86
+          dir ./cef_win32/cef_win32
 
       - name: Build
         uses: actions-rs/cargo@v1
