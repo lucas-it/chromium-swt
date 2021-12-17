@@ -24,7 +24,7 @@ jobs:
         run: |
           cd chromium-library/chromium_subp
           curl https://cef-builds.spotifycdn.com/cef_binary_3.3497.1841.g7f37a0a_windows64_minimal.tar.bz2 -o cef_win32.tar.bz2
-          curl https://repo.maven.apache.org/maven2/com/google/googlejavaformat/google-java-format/1.12.0/google-java-format-1.12.0-all-deps.jar -o ../google-java-format-all-deps.jar
+          curl https://repo.maven.apache.org/maven2/com/google/googlejavaformat/google-java-format/1.6/google-java-format-1.6-all-deps.jar -o ../google-java-format-all-deps.jar
           7z x cef_win32.tar.bz2 -o"cef_win32.tar"
           7z x cef_win32.tar/cef_win32.tar -o"cef_win32"
           mv cef_win32/cef_*/* cef_win32
@@ -57,12 +57,6 @@ jobs:
         with:
           command: build
           args: --features genJava --release --manifest-path ./chromium-library/chromium_subp/Cargo.toml
-
-      - name: Archive artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: google-java-format
-          path: chromium-library/google-java-format-all-deps.jar
 
       - name: Generate Java CEF Bindings (Java format)
         run: |
