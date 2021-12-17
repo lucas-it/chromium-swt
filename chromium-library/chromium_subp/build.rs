@@ -41,8 +41,11 @@ fn get_cef_path() -> std::path::PathBuf {
   else if cfg!(target_os = "windows") {
     if std::env::var("CARGO_CFG_TARGET_ARCH").unwrap() == "x86" {
       cef_path.push("cef_win32_x86");
+      println!("building for windows 32 bits");
     } else {
     cef_path.push("cef_win32");
+    println!("build for windows 64 bits");
+    }
   }
   }
   cef_path
