@@ -59,11 +59,16 @@ jobs:
           command: build
           args: --features genJava --release --manifest-path ./chromium-library/chromium_subp/Cargo.toml
 
+      - name: Archive artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: google-java-format
+          path: chromium-library/google-java-format-all-deps.jar
+
       - name: Generate Java CEF Bindings (Java format)
         run: |
           cd chromium-library
-          ls
-          ls chromium_subp/target
+          java -version
           java -jar ./google-java-format-all-deps.jar --replace ./chromium_subp/target/CEF.java
           mkdir ../com.equo.swt.chromium/bin/org/eclipse/swt/internal/chromium
           cp ./chromium_subp/target/CEF.java ../com.equo.swt.chromium/bin/org/eclipse/swt/internal/chromium
