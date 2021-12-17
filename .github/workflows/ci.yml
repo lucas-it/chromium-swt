@@ -29,6 +29,8 @@ jobs:
           7z x cef_win32.tar/cef_win32.tar -o"cef_win32"
           7z x cef_win32_x86.tar.bz2 -o"cef_win32_x86.tar"
           7z x cef_win32_x86.tar/cef_win32_x86.tar -o"cef_win32_x86"
+          mv cef_win32/cef_* cef_win32
+          mv cef_win32_x86/cef_* cef_win32_x86
           ls
           ls cef_win32
           ls cef_win32_x86
@@ -38,4 +40,4 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release --manifest-path ./chromium_subp/Cargo.toml
+          args: --release --manifest-path ./chromium-library/chromium_subp/Cargo.toml
