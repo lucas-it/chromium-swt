@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - release/*
+  pull_request:
+    branches:
+      - main
+      - release/*
+
+jobs:
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      CHILD_CONCURRENCY: "1"
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+
+      - name: Setup environment
+        run: |
+          cd chromium-library/chromium_subp
+          wget https://cef-builds.spotifycdn.com/cef_binary_96.0.18%2Bgfe551e4%2Bchromium-96.0.4664.110_windows64_minimal.tar.bz2 -o ./cef_win32.bz2
+          wget https://cef-builds.spotifycdn.com/cef_binary_96.0.18%2Bgfe551e4%2Bchromium-96.0.4664.110_windows32_minimal.tar.bz2 -o ./cef_win32_x86.bz2
+          tar -xvzf ./cef_win32.bz2 ./cef_win32
+          tar -xvzf ./cef_win32_x86.bz2 ./cef_win32_x86
+
