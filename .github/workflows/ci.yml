@@ -29,8 +29,7 @@ jobs:
           7z x cef_win32_x86.bz2
           ls
           echo "---------------"
-          cd cef_win32
-          ls
+          ls cef_win32
           echo "---------------"
           ls cef_win32/cef_win32
 
