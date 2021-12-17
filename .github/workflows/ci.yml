@@ -63,6 +63,7 @@ jobs:
         run: |
           cd chromium-library
           java -jar google-java-format-all-deps.jar --replace ./chromium_subp/target/CEF.java
+          mkdir ../com.equo.swt.chromium/bin/org/eclipse/swt/internal/chromium
           cp ./chromium_subp/target/CEF.java ../com.equo.swt.chromium/bin/org/eclipse/swt/internal/chromium
 
       - name: Archive artifacts
