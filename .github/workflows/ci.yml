@@ -28,7 +28,9 @@ jobs:
           7z x ./cef_win32.bz2
           7z x ./cef_win32_x86.bz2
           dir
+          echo "---------------"
           dir ./cef_win32
+          echo "---------------"
           dir ./cef_win32_x86
 
       - name: Build
