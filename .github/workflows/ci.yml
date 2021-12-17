@@ -24,8 +24,7 @@ jobs:
         run: |
           cd chromium-library/chromium_subp
           curl https://cef-builds.spotifycdn.com/cef_binary_3.3497.1841.g7f37a0a_windows64_minimal.tar.bz2 -o cef_win32.tar.bz2
-          curl https://github.com/google/google-java-format/releases/download/v1.13.0/google-java-format-1.13.0-all-deps.jar -o ../google-java-format-all-deps.jar
-          cd chromium_subp
+          curl https://repo.maven.apache.org/maven2/com/google/googlejavaformat/google-java-format/1.13.0/google-java-format-1.13.0-all-deps.jar -o ../google-java-format-all-deps.jar
           7z x cef_win32.tar.bz2 -o"cef_win32.tar"
           7z x cef_win32.tar/cef_win32.tar -o"cef_win32"
           mv cef_win32/cef_*/* cef_win32
