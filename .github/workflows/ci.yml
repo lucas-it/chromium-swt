@@ -31,6 +31,10 @@ jobs:
           7z x cef_win32_x86.tar/cef_win32_x86.tar -o"cef_win32_x86"
           mv cef_win32/cef_*/* cef_win32
           mv cef_win32_x86/cef_*/* cef_win32_x86
+          rm cef_win32.*
+          rm cef_win32/cef_*
+          rm cef_win32_x86.*
+          rm cef_win32_x86/cef_*
           ls
           ls cef_win32
           ls cef_win32_x86
@@ -41,3 +45,9 @@ jobs:
         with:
           command: build
           args: --release --manifest-path ./chromium-library/chromium_subp/Cargo.toml
+
+      - name: Archive artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: chromium_subp-target
+          path: chromium-library/chromium_subp/target
