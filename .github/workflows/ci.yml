@@ -12,13 +12,13 @@ jobs:
   windows:
     name: Windows
     runs-on: windows-latest
-    timeout-minutes: 40
-    env:
-      CHILD_CONCURRENCY: "1"
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          components: rustfmt, clippy
 
       - name: Setup environment
         run: |
@@ -28,3 +28,8 @@ jobs:
           tar -xvzf ./cef_win32.bz2 ./cef_win32
           tar -xvzf ./cef_win32_x86.bz2 ./cef_win32_x86
 
+      - name: Build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release
