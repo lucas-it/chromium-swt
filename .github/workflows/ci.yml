@@ -22,7 +22,9 @@ jobs:
 
       - name: Setup environment
         run: |
-          cd chromium-library/chromium_subp
+          cd chromium-library
+          curl https://github.com/google/google-java-format/releases/download/v1.13.0/google-java-format-1.13.0-all-deps.jar -o google-java-format-all-deps.jar
+          cd chromium_subp
           curl https://cef-builds.spotifycdn.com/cef_binary_96.0.18%2Bgfe551e4%2Bchromium-96.0.4664.110_windows64_minimal.tar.bz2 -o cef_win32.tar.bz2
           curl https://cef-builds.spotifycdn.com/cef_binary_96.0.18%2Bgfe551e4%2Bchromium-96.0.4664.110_windows32_minimal.tar.bz2 -o cef_win32_x86.tar.bz2
           7z x cef_win32.tar.bz2 -o"cef_win32.tar"
@@ -37,12 +39,32 @@ jobs:
         with:
           command: build
           args: --release --manifest-path ./chromium-library/chromium_subp/Cargo.toml
+        run: cp ./chromium-library/chromium_subp/target/release/chromium_subp.exe ./chromium-library/com.equo.swt.chromium.win32.win32.x86_64/chromium-3497
 
       - name: Build native library
         uses: actions-rs/cargo@v1
         with:
           command: build
           args: --release --manifest-path ./chromium-library/chromium_swt/Cargo.toml
+        run: cp ./chromium-library/chromium_swt/target/release/chromium_swt_6900.dll ./chromium-library/com.equo.swt.chromium.win32.win32.x86_64/chromium-3497
+
+      - name: Generate Rust CEF Bindings
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --features gen --release --manifest-path ./chromium-library/chromium_subp/Cargo.toml
+
+      - name: Generate Java CEF Bindings (Cargo)
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: build --features genJava --release --manifest-path ./chromium-library/chromium_subp/Cargo.toml
+
+      - name: Generate Java CEF Bindings (Java format)
+        run: |
+          cd chromium-library
+          java -jar google-java-format-all-deps.jar --replace ./chromium_subp/target/CEF.java
+          cp ./chromium_subp/target/CEF.java ../com.equo.swt.chromium/bin/org/eclipse/swt/internal/chromium
 
       - name: Archive artifacts
         uses: actions/upload-artifact@v2
