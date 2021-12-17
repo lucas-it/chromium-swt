@@ -31,10 +31,10 @@ jobs:
           7z x cef_win32_x86.tar/cef_win32_x86.tar -o"cef_win32_x86"
           mv cef_win32/cef_*/* cef_win32
           mv cef_win32_x86/cef_*/* cef_win32_x86
-          rm cef_win32.*
-          rm cef_win32/cef_*
-          rm cef_win32_x86.*
-          rm cef_win32_x86/cef_*
+          del cef_win32.*
+          del cef_win32/cef_*
+          del cef_win32_x86.*
+          del cef_win32_x86/cef_*
           ls
           ls cef_win32
           ls cef_win32_x86
