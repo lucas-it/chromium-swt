@@ -3,10 +3,10 @@ name: CI
 on:
   push:
     branches:
-      - feature/ci # only for testing
+      - '*'
   pull_request:
     branches:
-      - feature/ci # only for testing
+      - '*'
 
 jobs:
   windows:
