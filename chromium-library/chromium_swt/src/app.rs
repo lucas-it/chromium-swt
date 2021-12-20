@@ -30,7 +30,7 @@ pub fn create_browser(canvas_hwnd: *mut c_void, url: &str, jclient: &mut cef::_c
         remote_fonts: cef::cef_state_t::STATE_DEFAULT,
         javascript: if js == 0 { cef::cef_state_t::STATE_DISABLED } else { cef::cef_state_t::STATE_DEFAULT },
         javascript_close_windows: cef::cef_state_t::STATE_DEFAULT,
-        javascript_access_clipboard: cef::cef_state_t::STATE_DEFAULT,
+        javascript_access_clipboard: cef::cef_state_t::STATE_ENABLED,
         javascript_dom_paste: cef::cef_state_t::STATE_DEFAULT,
         plugins: cef::cef_state_t::STATE_DEFAULT,
         universal_access_from_file_urls: cef::cef_state_t::STATE_ENABLED,
