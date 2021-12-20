@@ -18,6 +18,8 @@ winapi = { version = "0.3", features = ["winuser", "libloaderapi"] }
 
 [features]
 gen = ["bindgen"]
+genJava = ["java_bindgen"]
 
 [build-dependencies]
 bindgen = { version = "0.41.0", optional = true }
+java_bindgen = { git = "https://github.com/maketechnology/java-bindgen", branch = "java-bindgen", optional = true }
