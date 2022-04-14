@@ -128,8 +128,12 @@ pub fn wait_response(browser: *mut cef::cef_browser_t,
             let port = listener.local_addr().unwrap().port();
             let s = unsafe {(*args).set_int.unwrap()(args, 0, port as i32) };
             assert_eq!(s, 1);
-            let sent = unsafe {(*browser).send_process_message.unwrap()(browser, target, msg)};
-            assert_eq!(sent, 1);
+            
+            unsafe {(*(*browser).get_main_frame.unwrap()(browser)).send_process_message.unwrap()(
+                (*browser).get_main_frame.unwrap()(browser),
+                target,
+                msg
+            )};
 
             //println!("new server, waiting response in :{:?}", port);
             let mut res = None;

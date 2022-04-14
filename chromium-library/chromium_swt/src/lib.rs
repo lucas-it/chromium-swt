@@ -19,6 +19,7 @@ mod gtk;
 use std::os::raw::{c_char, c_int, c_void};
 #[cfg(unix)]
 use std::collections::HashMap;
+use chromium::cef::{cef_cookie_priority_t, cef_cookie_same_site_t};
 
 #[cfg(target_os = "linux")]
 unsafe extern fn xerror_handler_impl(_: *mut x11::xlib::Display, _event: *mut x11::xlib::XErrorEvent) -> c_int {
@@ -80,16 +81,19 @@ pub extern fn cefswt_init(japp: *mut cef::cef_app_t, cefrust_path: *const c_char
         no_sandbox: 1,
         browser_subprocess_path: subp_cef,
         framework_dir_path: framework_dir_cef,
+        main_bundle_path: utils::cef_string_empty(),
+        chrome_runtime: 0,
         multi_threaded_message_loop: 0,
         external_message_pump: 1,
         windowless_rendering_enabled: 0,
         command_line_args_disabled: 0,
         cache_path: cache_dir_cef,
+        root_cache_path: cache_dir_cef,
         user_data_path: utils::cef_string_empty(),
         persist_session_cookies: 1,
         persist_user_preferences: 1,
         user_agent: utils::cef_string_empty(),
-        product_version: utils::cef_string_empty(),
+        user_agent_product: utils::cef_string_empty(),
         locale: utils::cef_string_empty(),
         log_file: logfile_cef,
         log_severity: cef::cef_log_severity_t::LOGSEVERITY_INFO,
@@ -100,10 +104,11 @@ pub extern fn cefswt_init(japp: *mut cef::cef_app_t, cefrust_path: *const c_char
         pack_loading_disabled: 0,
         remote_debugging_port: debug_port,
         uncaught_exception_stack_size: 0,
-        ignore_certificate_errors: 0,
-        enable_net_security_expiration: 0,
         background_color: 0,
-        accept_language_list: utils::cef_string_empty()
+        accept_language_list: utils::cef_string_empty(),
+        cookieable_schemes_list:utils::cef_string_empty(),
+        cookieable_schemes_exclude_defaults: 0,
+        application_client_id_for_file_scanning: utils::cef_string_empty()
     };
 
     //println!("Calling cef_initialize");
@@ -453,18 +458,6 @@ pub extern fn cefswt_cookie_to_java(cookie: *mut cef::_cef_cookie_t) -> *mut c_c
 }
 
 #[no_mangle]
-pub extern fn cefswt_load_text(browser: *mut cef::cef_browser_t, text: *const c_char) {
-    let text = utils::str_from_c(text);
-    let text_cef = utils::cef_string(text);
-    let url_cef = utils::cef_string("http://text/");
-    // println!("text: {:?}", text);
-    let get_frame = unsafe { (*browser).get_main_frame.expect("null get_main_frame") };
-    let main_frame = unsafe { get_frame(browser) };
-    let load_string = unsafe { (*main_frame).load_string.expect("null load_string") };
-    unsafe { load_string(main_frame, &text_cef, &url_cef) };
-}
-
-#[no_mangle]
 pub extern fn cefswt_stop(browser: *mut cef::cef_browser_t) {
     unsafe { (*browser).stop_load.expect("null stop_load")(browser); };
 }
@@ -533,9 +526,14 @@ pub extern fn cefswt_function(browser: *mut cef::cef_browser_t, name: *mut c_cha
         assert_eq!(s, 1);
         let s = (*args).set_string.unwrap()(args, 1, &name_cef);
         assert_eq!(s, 1);
-        let sent = (*browser).send_process_message.unwrap()(browser, cef::cef_process_id_t::PID_RENDERER, msg);
-        assert_eq!(sent, 1);
-        sent
+        
+        (*(*browser).get_main_frame.unwrap()(browser)).send_process_message.unwrap()(
+            (*browser).get_main_frame.unwrap()(browser),
+            cef::cef_process_id_t::PID_RENDERER,
+            msg
+        );
+
+        0
     }
 }
 
@@ -706,7 +704,7 @@ pub extern fn cefswt_handlekey(browser: *mut cef::cef_browser_t, event: *const c
 }
 
 #[no_mangle]
-pub extern fn cefswt_set_cookie(jurl: *const c_char, jname: *const c_char, jvalue: *const c_char, jdomain: *const c_char, jpath: *const c_char, secure: i32, httponly: i32, max_age: f64) -> c_int {
+pub extern fn cefswt_set_cookie(jurl: *const c_char, jname: *const c_char, jvalue: *const c_char, jdomain: *const c_char, jpath: *const c_char, secure: i32, httponly: i32, max_age: f64, jsame_site: c_int, jpriority: c_int) -> c_int {
     let manager = unsafe { cef::cef_cookie_manager_get_global_manager(std::ptr::null_mut()) };
     let url = utils::cef_string_from_c(jurl);
     let domain = utils::cef_string_from_c(jdomain);
@@ -724,6 +722,19 @@ pub extern fn cefswt_set_cookie(jurl: *const c_char, jname: *const c_char, jvalu
         unsafe { cef::cef_time_from_doublet(max_age, &mut expires) };
     }
 
+    let same_site: cef_cookie_same_site_t = match jsame_site {
+        1 => cef_cookie_same_site_t::CEF_COOKIE_SAME_SITE_NO_RESTRICTION,
+        2 => cef_cookie_same_site_t::CEF_COOKIE_SAME_SITE_LAX_MODE,
+        3 => cef_cookie_same_site_t::CEF_COOKIE_SAME_SITE_STRICT_MODE,
+        _ => cef_cookie_same_site_t::CEF_COOKIE_SAME_SITE_UNSPECIFIED,
+    };
+
+    let priority: cef_cookie_priority_t = match jpriority {
+        0 => cef_cookie_priority_t::CEF_COOKIE_PRIORITY_MEDIUM,
+        1 => cef_cookie_priority_t::CEF_COOKIE_PRIORITY_HIGH,
+        _ => cef_cookie_priority_t::CEF_COOKIE_PRIORITY_LOW,
+    };
+
     let cookie = cef::_cef_cookie_t {
         name: name,
         value: value,
@@ -733,8 +744,10 @@ pub extern fn cefswt_set_cookie(jurl: *const c_char, jname: *const c_char, jvalu
         httponly,
         has_expires,
         expires,
+        same_site,
         creation: expires,
-        last_access: expires
+        last_access: expires,
+        priority
     };
     unsafe { (*manager).set_cookie.expect("null set_cookie")(manager, &url, &cookie, std::ptr::null_mut()) }
 }

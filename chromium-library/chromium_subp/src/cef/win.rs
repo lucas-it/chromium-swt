@@ -26,6 +26,21 @@ pub struct HMENU__ {
 }
 pub type HMENU = *mut HMENU__;
 ///
+/// Structure representing a rectangle.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_rect_t {
+    pub x: ::std::os::raw::c_int,
+    pub y: ::std::os::raw::c_int,
+    pub width: ::std::os::raw::c_int,
+    pub height: ::std::os::raw::c_int,
+}
+///
+/// Structure representing a rectangle.
+///
+pub type cef_rect_t = _cef_rect_t;
+///
 /// Structure representing CefExecuteProcess arguments.
 ///
 #[repr(C)]
@@ -42,10 +57,7 @@ pub struct _cef_window_info_t {
     pub ex_style: DWORD,
     pub window_name: cef_string_t,
     pub style: DWORD,
-    pub x: ::std::os::raw::c_int,
-    pub y: ::std::os::raw::c_int,
-    pub width: ::std::os::raw::c_int,
-    pub height: ::std::os::raw::c_int,
+    pub bounds: cef_rect_t,
     pub parent_window: HWND,
     pub menu: HMENU,
     ///
@@ -61,6 +73,17 @@ pub struct _cef_window_info_t {
     /// CefBrowserSettings.background_color to an opaque value.
     ///
     pub windowless_rendering_enabled: ::std::os::raw::c_int,
+    ///
+    /// Set to true (1) to enable shared textures for windowless rendering. Only
+    /// valid if windowless_rendering_enabled above is also set to true. Currently
+    /// only supported on Windows (D3D11).
+    ///
+    pub shared_texture_enabled: ::std::os::raw::c_int,
+    ///
+    /// Set to true (1) to enable the ability to issue BeginFrame requests from the
+    /// client application by calling CefBrowserHost::SendExternalBeginFrame.
+    ///
+    pub external_begin_frame_enabled: ::std::os::raw::c_int,
     ///
     /// Handle for the new browser window. Only used with windowed rendering.
     ///

@@ -16,6 +16,7 @@ impl Base {
             size,
             add_ref: Option::None,
             has_one_ref: Option::None,
+            has_at_least_one_ref: Option::None,
             release: Option::None
         }
     }
@@ -115,6 +116,7 @@ impl RenderProcessHandler {
         unsafe extern "C" fn on_process_message_received(
             self_: *mut cef::_cef_render_process_handler_t,
             browser: *mut cef::_cef_browser_t,
+            _: *mut cef::_cef_frame_t,
             source_process: cef::cef_process_id_t,
             message: *mut cef::_cef_process_message_t,
         ) -> c_int {
@@ -165,7 +167,6 @@ impl RenderProcessHandler {
 
         cef::_cef_render_process_handler_t {
             base: Base::new(mem::size_of::<cef::_cef_render_process_handler_t>()),
-            on_render_thread_created: Option::None,
             on_web_kit_initialized: Option::None,
             on_browser_created: Option::None,
             on_browser_destroyed: Option::None,

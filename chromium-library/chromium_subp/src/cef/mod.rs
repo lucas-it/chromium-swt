@@ -251,6 +251,47 @@ extern "C" {
 pub type cef_string_userfree_t = cef_string_userfree_utf16_t;
 pub type cef_string_t = cef_string_utf16_t;
 ///
+/// Structure representing a point.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_point_t {
+    pub x: ::std::os::raw::c_int,
+    pub y: ::std::os::raw::c_int,
+}
+///
+/// Structure representing a point.
+///
+pub type cef_point_t = _cef_point_t;
+///
+/// Structure representing a rectangle.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_rect_t {
+    pub x: ::std::os::raw::c_int,
+    pub y: ::std::os::raw::c_int,
+    pub width: ::std::os::raw::c_int,
+    pub height: ::std::os::raw::c_int,
+}
+///
+/// Structure representing a rectangle.
+///
+pub type cef_rect_t = _cef_rect_t;
+///
+/// Structure representing a size.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_size_t {
+    pub width: ::std::os::raw::c_int,
+    pub height: ::std::os::raw::c_int,
+}
+///
+/// Structure representing a size.
+///
+pub type cef_size_t = _cef_size_t;
+///
 /// Structure representing window information.
 ///
 pub type cef_window_info_t = _cef_window_info_t;
@@ -411,7 +452,12 @@ pub enum cef_log_severity_t {
     ///
     LOGSEVERITY_ERROR = 4,
     ///
-    /// Completely disable logging.
+    /// FATAL logging.
+    ///
+    LOGSEVERITY_FATAL = 5,
+    ///
+    /// Disable logging to file for all messages, and to stderr for messages with
+    /// severity less than FATAL.
     ///
     LOGSEVERITY_DISABLE = 99,
 }
@@ -458,20 +504,34 @@ pub struct _cef_settings_t {
     /// will be used. If this value is empty on macOS then a helper executable must
     /// exist at "Contents/Frameworks/<app> Helper.app/Contents/MacOS/<app> Helper"
     /// in the top-level app bundle. See the comments on CefExecuteProcess() for
-    /// details. Also configurable using the "browser-subprocess-path" command-line
-    /// switch.
+    /// details. If this value is non-empty then it must be an absolute path. Also
+    /// configurable using the "browser-subprocess-path" command-line switch.
     ///
     pub browser_subprocess_path: cef_string_t,
     ///
     /// The path to the CEF framework directory on macOS. If this value is empty
     /// then the framework must exist at "Contents/Frameworks/Chromium Embedded
-    /// Framework.framework" in the top-level app bundle. Also configurable using
-    /// the "framework-dir-path" command-line switch.
+    /// Framework.framework" in the top-level app bundle. If this value is
+    /// non-empty then it must be an absolute path. Also configurable using the
+    /// "framework-dir-path" command-line switch.
     ///
     pub framework_dir_path: cef_string_t,
     ///
+    /// The path to the main bundle on macOS. If this value is empty then it
+    /// defaults to the top-level app bundle. If this value is non-empty then it
+    /// must be an absolute path. Also configurable using the "main-bundle-path"
+    /// command-line switch.
+    ///
+    pub main_bundle_path: cef_string_t,
+    ///
+    /// Set to true (1) to enable use of the Chrome runtime in CEF. This feature is
+    /// considered experimental and is not recommended for most users at this time.
+    /// See issue #2969 for details.
+    ///
+    pub chrome_runtime: ::std::os::raw::c_int,
+    ///
     /// Set to true (1) to have the browser process message loop run in a separate
-    /// thread. If false (0) than the CefDoMessageLoopWork() function must be
+    /// thread. If false (0) then the CefDoMessageLoopWork() function must be
     /// called from your application message loop. This option is only supported on
     /// Windows and Linux.
     ///
@@ -501,21 +561,37 @@ pub struct _cef_settings_t {
     ///
     pub command_line_args_disabled: ::std::os::raw::c_int,
     ///
-    /// The location where cache data will be stored on disk. If empty then
-    /// browsers will be created in "incognito mode" where in-memory caches are
-    /// used for storage and no data is persisted to disk. HTML5 databases such as
-    /// localStorage will only persist across sessions if a cache path is
-    /// specified. Can be overridden for individual CefRequestContext instances via
-    /// the CefRequestContextSettings.cache_path value.
+    /// The location where data for the global browser cache will be stored on
+    /// disk. If this value is non-empty then it must be an absolute path that is
+    /// either equal to or a child directory of CefSettings.root_cache_path. If
+    /// this value is empty then browsers will be created in "incognito mode" where
+    /// in-memory caches are used for storage and no data is persisted to disk.
+    /// HTML5 databases such as localStorage will only persist across sessions if a
+    /// cache path is specified. Can be overridden for individual CefRequestContext
+    /// instances via the CefRequestContextSettings.cache_path value. When using
+    /// the Chrome runtime the "default" profile will be used if |cache_path| and
+    /// |root_cache_path| have the same value.
     ///
     pub cache_path: cef_string_t,
     ///
-    /// The location where user data such as spell checking dictionary files will
-    /// be stored on disk. If empty then the default platform-specific user data
-    /// directory will be used ("~/.cef_user_data" directory on Linux,
-    /// "~/Library/Application Support/CEF/User Data" directory on Mac OS X,
-    /// "Local Settings\Application Data\CEF\User Data" directory under the user
-    /// profile directory on Windows).
+    /// The root directory that all CefSettings.cache_path and
+    /// CefRequestContextSettings.cache_path values must have in common. If this
+    /// value is empty and CefSettings.cache_path is non-empty then it will
+    /// default to the CefSettings.cache_path value. If this value is non-empty
+    /// then it must be an absolute path. Failure to set this value correctly may
+    /// result in the sandbox blocking read/write access to the cache_path
+    /// directory.
+    ///
+    pub root_cache_path: cef_string_t,
+    ///
+    /// The location where user data such as the Widevine CDM module and spell
+    /// checking dictionary files will be stored on disk. If this value is empty
+    /// then the default platform-specific user data directory will be used
+    /// ("~/.config/cef_user_data" directory on Linux, "~/Library/Application
+    /// Support/CEF/User Data" directory on MacOS, "AppData\Local\CEF\User Data"
+    /// directory under the user profile directory on Windows). If this value is
+    /// non-empty then it must be an absolute path. When using the Chrome runtime
+    /// this value will be ignored in favor of the |root_cache_path| value.
     ///
     pub user_data_path: cef_string_t,
     ///
@@ -548,9 +624,9 @@ pub struct _cef_settings_t {
     /// Value that will be inserted as the product portion of the default
     /// User-Agent string. If empty the Chromium product version will be used. If
     /// |userAgent| is specified this value will be ignored. Also configurable
-    /// using the "product-version" command-line switch.
+    /// using the "user-agent-product" command-line switch.
     ///
-    pub product_version: cef_string_t,
+    pub user_agent_product: cef_string_t,
     ///
     /// The locale string that will be passed to WebKit. If empty the default
     /// locale of "en-US" will be used. This value is ignored on Linux where locale
@@ -562,7 +638,7 @@ pub struct _cef_settings_t {
     ///
     /// The directory and file name to use for the debug log. If empty a default
     /// log file name and location will be used. On Windows and Linux a "debug.log"
-    /// file will be written in the main executable directory. On Mac OS X a
+    /// file will be written in the main executable directory. On MacOS a
     /// "~/Library/Logs/<app name>_debug.log" file will be written where <app name>
     /// is the name of the main app executable. Also configurable using the
     /// "log-file" command-line switch.
@@ -570,9 +646,10 @@ pub struct _cef_settings_t {
     pub log_file: cef_string_t,
     ///
     /// The log severity. Only messages of this severity level or higher will be
-    /// logged. Also configurable using the "log-severity" command-line switch with
-    /// a value of "verbose", "info", "warning", "error", "error-report" or
-    /// "disable".
+    /// logged. When set to DISABLE no messages will be written to the log file,
+    /// but FATAL messages will still be output to stderr. Also configurable using
+    /// the "log-severity" command-line switch with a value of "verbose", "info",
+    /// "warning", "error", "fatal" or "disable".
     ///
     pub log_severity: cef_log_severity_t,
     ///
@@ -583,18 +660,19 @@ pub struct _cef_settings_t {
     pub javascript_flags: cef_string_t,
     ///
     /// The fully qualified path for the resources directory. If this value is
-    /// empty the cef.pak and/or devtools_resources.pak files must be located in
-    /// the module directory on Windows/Linux or the app bundle Resources directory
-    /// on Mac OS X. Also configurable using the "resources-dir-path" command-line
-    /// switch.
+    /// empty the *.pak files must be located in the module directory on
+    /// Windows/Linux or the app bundle Resources directory on MacOS. If this
+    /// value is non-empty then it must be an absolute path. Also configurable
+    /// using the "resources-dir-path" command-line switch.
     ///
     pub resources_dir_path: cef_string_t,
     ///
     /// The fully qualified path for the locales directory. If this value is empty
-    /// the locales directory must be located in the module directory. This value
-    /// is ignored on Mac OS X where pack files are always loaded from the app
-    /// bundle Resources directory. Also configurable using the "locales-dir-path"
-    /// command-line switch.
+    /// the locales directory must be located in the module directory. If this
+    /// value is non-empty then it must be an absolute path. This value is ignored
+    /// on MacOS where pack files are always loaded from the app bundle Resources
+    /// directory. Also configurable using the "locales-dir-path" command-line
+    /// switch.
     ///
     pub locales_dir_path: cef_string_t,
     ///
@@ -607,10 +685,11 @@ pub struct _cef_settings_t {
     pub pack_loading_disabled: ::std::os::raw::c_int,
     ///
     /// Set to a value between 1024 and 65535 to enable remote debugging on the
-    /// specified port. For example, if 8080 is specified the remote debugging URL
-    /// will be http://localhost:8080. CEF can be remotely debugged from any CEF or
-    /// Chrome browser window. Also configurable using the "remote-debugging-port"
-    /// command-line switch.
+    /// specified port. Also configurable using the "remote-debugging-port"
+    /// command-line switch. Remote debugging can be accessed by loading the
+    /// chrome://inspect page in Google Chrome. Port numbers 9222 and 9229 are
+    /// discoverable by default. Other port numbers may need to be configured via
+    /// "Discover network targets" on the Devices tab.
     ///
     pub remote_debugging_port: ::std::os::raw::c_int,
     ///
@@ -621,28 +700,6 @@ pub struct _cef_settings_t {
     /// "uncaught-exception-stack-size" command-line switch.
     ///
     pub uncaught_exception_stack_size: ::std::os::raw::c_int,
-    ///
-    /// Set to true (1) to ignore errors related to invalid SSL certificates.
-    /// Enabling this setting can lead to potential security vulnerabilities like
-    /// "man in the middle" attacks. Applications that load content from the
-    /// internet should not enable this setting. Also configurable using the
-    /// "ignore-certificate-errors" command-line switch. Can be overridden for
-    /// individual CefRequestContext instances via the
-    /// CefRequestContextSettings.ignore_certificate_errors value.
-    ///
-    pub ignore_certificate_errors: ::std::os::raw::c_int,
-    ///
-    /// Set to true (1) to enable date-based expiration of built in network
-    /// security information (i.e. certificate transparency logs, HSTS preloading
-    /// and pinning information). Enabling this option improves network security
-    /// but may cause HTTPS load failures when using CEF binaries built more than
-    /// 10 weeks in the past. See https://www.certificate-transparency.org/ and
-    /// https://www.chromium.org/hsts for details. Also configurable using the
-    /// "enable-net-security-expiration" command-line switch. Can be overridden for
-    /// individual CefRequestContext instances via the
-    /// CefRequestContextSettings.enable_net_security_expiration value.
-    ///
-    pub enable_net_security_expiration: ::std::os::raw::c_int,
     ///
     /// Background color used for the browser before a document is loaded and when
     /// no document color is specified. The alpha component must be either fully
@@ -663,6 +720,26 @@ pub struct _cef_settings_t {
     /// CefRequestContextSettings.accept_language_list value.
     ///
     pub accept_language_list: cef_string_t,
+    ///
+    /// Comma delimited list of schemes supported by the associated
+    /// CefCookieManager. If |cookieable_schemes_exclude_defaults| is false (0) the
+    /// default schemes ("http", "https", "ws" and "wss") will also be supported.
+    /// Specifying a |cookieable_schemes_list| value and setting
+    /// |cookieable_schemes_exclude_defaults| to true (1) will disable all loading
+    /// and saving of cookies for this manager. Can be overridden
+    /// for individual CefRequestContext instances via the
+    /// CefRequestContextSettings.cookieable_schemes_list and
+    /// CefRequestContextSettings.cookieable_schemes_exclude_defaults values.
+    ///
+    pub cookieable_schemes_list: cef_string_t,
+    pub cookieable_schemes_exclude_defaults: ::std::os::raw::c_int,
+    ///
+    /// GUID string used for identifying the application. This is passed to the
+    /// system AV function for scanning downloaded files. By default, the GUID
+    /// will be an empty string and the file will be treated as an untrusted
+    /// file when the GUID is empty.
+    ///
+    pub application_client_id_for_file_scanning: cef_string_t,
 }
 ///
 /// Request context initialization settings. Specify NULL or 0 to get the
@@ -676,12 +753,14 @@ pub struct _cef_request_context_settings_t {
     ///
     pub size: usize,
     ///
-    /// The location where cache data will be stored on disk. If empty then
-    /// browsers will be created in "incognito mode" where in-memory caches are
-    /// used for storage and no data is persisted to disk. HTML5 databases such as
-    /// localStorage will only persist across sessions if a cache path is
-    /// specified. To share the global browser cache and related configuration set
-    /// this value to match the CefSettings.cache_path value.
+    /// The location where cache data for this request context will be stored on
+    /// disk. If this value is non-empty then it must be an absolute path that is
+    /// either equal to or a child directory of CefSettings.root_cache_path. If
+    /// this value is empty then browsers will be created in "incognito mode" where
+    /// in-memory caches are used for storage and no data is persisted to disk.
+    /// HTML5 databases such as localStorage will only persist across sessions if a
+    /// cache path is specified. To share the global browser cache and related
+    /// configuration set this value to match the CefSettings.cache_path value.
     ///
     pub cache_path: cef_string_t,
     ///
@@ -701,25 +780,6 @@ pub struct _cef_request_context_settings_t {
     ///
     pub persist_user_preferences: ::std::os::raw::c_int,
     ///
-    /// Set to true (1) to ignore errors related to invalid SSL certificates.
-    /// Enabling this setting can lead to potential security vulnerabilities like
-    /// "man in the middle" attacks. Applications that load content from the
-    /// internet should not enable this setting. Can be set globally using the
-    /// CefSettings.ignore_certificate_errors value. This value will be ignored if
-    /// |cache_path| matches the CefSettings.cache_path value.
-    ///
-    pub ignore_certificate_errors: ::std::os::raw::c_int,
-    ///
-    /// Set to true (1) to enable date-based expiration of built in network
-    /// security information (i.e. certificate transparency logs, HSTS preloading
-    /// and pinning information). Enabling this option improves network security
-    /// but may cause HTTPS load failures when using CEF binaries built more than
-    /// 10 weeks in the past. See https://www.certificate-transparency.org/ and
-    /// https://www.chromium.org/hsts for details. Can be set globally using the
-    /// CefSettings.enable_net_security_expiration value.
-    ///
-    pub enable_net_security_expiration: ::std::os::raw::c_int,
-    ///
     /// Comma delimited ordered list of language codes without any whitespace that
     /// will be used in the "Accept-Language" HTTP header. Can be set globally
     /// using the CefSettings.accept_language_list value or overridden on a per-
@@ -728,6 +788,17 @@ pub struct _cef_request_context_settings_t {
     /// ignored if |cache_path| matches the CefSettings.cache_path value.
     ///
     pub accept_language_list: cef_string_t,
+    ///
+    /// Comma delimited list of schemes supported by the associated
+    /// CefCookieManager. If |cookieable_schemes_exclude_defaults| is false (0) the
+    /// default schemes ("http", "https", "ws" and "wss") will also be supported.
+    /// Specifying a |cookieable_schemes_list| value and setting
+    /// |cookieable_schemes_exclude_defaults| to true (1) will disable all loading
+    /// and saving of cookies for this manager. These values will be ignored if
+    /// |cache_path| matches the CefSettings.cache_path value.
+    ///
+    pub cookieable_schemes_list: cef_string_t,
+    pub cookieable_schemes_exclude_defaults: ::std::os::raw::c_int,
 }
 ///
 /// Browser initialization settings. Specify NULL or 0 to get the recommended
@@ -799,28 +870,6 @@ pub struct _cef_browser_settings_t {
     ///
     pub javascript_dom_paste: cef_state_t,
     ///
-    /// Controls whether any plugins will be loaded. Also configurable using the
-    /// "disable-plugins" command-line switch.
-    ///
-    pub plugins: cef_state_t,
-    ///
-    /// Controls whether file URLs will have access to all URLs. Also configurable
-    /// using the "allow-universal-access-from-files" command-line switch.
-    ///
-    pub universal_access_from_file_urls: cef_state_t,
-    ///
-    /// Controls whether file URLs will have access to other file URLs. Also
-    /// configurable using the "allow-access-from-files" command-line switch.
-    ///
-    pub file_access_from_file_urls: cef_state_t,
-    ///
-    /// Controls whether web security restrictions (same-origin policy) will be
-    /// enforced. Disabling this setting is not recommend as it will allow risky
-    /// security behavior such as cross-site scripting (XSS). Also configurable
-    /// using the "disable-web-security" command-line switch.
-    ///
-    pub web_security: cef_state_t,
-    ///
     /// Controls whether image URLs will be loaded from the network. A cached image
     /// will still be rendered if requested. Also configurable using the
     /// "disable-image-loading" command-line switch.
@@ -853,11 +902,6 @@ pub struct _cef_browser_settings_t {
     ///
     pub databases: cef_state_t,
     ///
-    /// Controls whether the application cache can be used. Also configurable using
-    /// the "disable-application-cache" command-line switch.
-    ///
-    pub application_cache: cef_state_t,
-    ///
     /// Controls whether WebGL can be used. Note that WebGL requires hardware
     /// support and may not work on all systems even when enabled. Also
     /// configurable using the "disable-webgl" command-line switch.
@@ -877,7 +921,7 @@ pub struct _cef_browser_settings_t {
     ///
     /// Comma delimited ordered list of language codes without any whitespace that
     /// will be used in the "Accept-Language" HTTP header. May be set globally
-    /// using the CefBrowserSettings.accept_language_list value. If both values are
+    /// using the CefSettings.accept_language_list value. If both values are
     /// empty then "en-US,en" will be used.
     ///
     pub accept_language_list: cef_string_t,
@@ -900,6 +944,27 @@ pub enum cef_return_value_t {
     /// Continue asynchronously (usually via a callback).
     ///
     RV_CONTINUE_ASYNC = 2,
+}
+#[repr(i32)]
+///
+/// Cookie priority values.
+///
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum cef_cookie_priority_t {
+    CEF_COOKIE_PRIORITY_LOW = -1,
+    CEF_COOKIE_PRIORITY_MEDIUM = 0,
+    CEF_COOKIE_PRIORITY_HIGH = 1,
+}
+#[repr(i32)]
+///
+/// Cookie same site values.
+///
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum cef_cookie_same_site_t {
+    CEF_COOKIE_SAME_SITE_UNSPECIFIED = 0,
+    CEF_COOKIE_SAME_SITE_NO_RESTRICTION = 1,
+    CEF_COOKIE_SAME_SITE_LAX_MODE = 2,
+    CEF_COOKIE_SAME_SITE_STRICT_MODE = 3,
 }
 ///
 /// Cookie information.
@@ -949,6 +1014,14 @@ pub struct _cef_cookie_t {
     ///
     pub has_expires: ::std::os::raw::c_int,
     pub expires: cef_time_t,
+    ///
+    /// Same site.
+    ///
+    pub same_site: cef_cookie_same_site_t,
+    ///
+    /// Priority.
+    ///
+    pub priority: cef_cookie_priority_t,
 }
 #[repr(i32)]
 ///
@@ -968,21 +1041,20 @@ pub enum cef_termination_status_t {
     /// Segmentation fault.
     ///
     TS_PROCESS_CRASHED = 2,
-}
-impl cef_errorcode_t {
-    pub const ERR_CERT_BEGIN: cef_errorcode_t = cef_errorcode_t::ERR_CERT_COMMON_NAME_INVALID;
-}
-impl cef_errorcode_t {
-    pub const ERR_CERT_END: cef_errorcode_t = cef_errorcode_t::ERR_CERT_VALIDITY_TOO_LONG;
+    ///
+    /// Out of memory. Some platforms may use TS_PROCESS_CRASHED instead.
+    ///
+    TS_PROCESS_OOM = 3,
 }
 #[repr(i32)]
 ///
-/// Supported error code values. See net\base\net_error_list.h for complete
-/// descriptions of the error codes.
+/// Supported error code values.
 ///
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum cef_errorcode_t {
+    /// No error.
     ERR_NONE = 0,
+    ERR_IO_PENDING = -1,
     ERR_FAILED = -2,
     ERR_ABORTED = -3,
     ERR_INVALID_ARGUMENT = -4,
@@ -993,6 +1065,25 @@ pub enum cef_errorcode_t {
     ERR_UNEXPECTED = -9,
     ERR_ACCESS_DENIED = -10,
     ERR_NOT_IMPLEMENTED = -11,
+    ERR_INSUFFICIENT_RESOURCES = -12,
+    ERR_OUT_OF_MEMORY = -13,
+    ERR_UPLOAD_FILE_CHANGED = -14,
+    ERR_SOCKET_NOT_CONNECTED = -15,
+    ERR_FILE_EXISTS = -16,
+    ERR_FILE_PATH_TOO_LONG = -17,
+    ERR_FILE_NO_SPACE = -18,
+    ERR_FILE_VIRUS_INFECTED = -19,
+    ERR_BLOCKED_BY_CLIENT = -20,
+    ERR_NETWORK_CHANGED = -21,
+    ERR_BLOCKED_BY_ADMINISTRATOR = -22,
+    ERR_SOCKET_IS_CONNECTED = -23,
+    ERR_BLOCKED_ENROLLMENT_CHECK_PENDING = -24,
+    ERR_UPLOAD_STREAM_REWIND_NOT_SUPPORTED = -25,
+    ERR_CONTEXT_SHUT_DOWN = -26,
+    ERR_BLOCKED_BY_RESPONSE = -27,
+    ERR_CLEARTEXT_NOT_PERMITTED = -29,
+    ERR_BLOCKED_BY_CSP = -30,
+    ERR_H2_OR_QUIC_REQUIRED = -31,
     ERR_CONNECTION_CLOSED = -100,
     ERR_CONNECTION_RESET = -101,
     ERR_CONNECTION_REFUSED = -102,
@@ -1008,6 +1099,63 @@ pub enum cef_errorcode_t {
     ERR_NO_SSL_VERSIONS_ENABLED = -112,
     ERR_SSL_VERSION_OR_CIPHER_MISMATCH = -113,
     ERR_SSL_RENEGOTIATION_REQUESTED = -114,
+    ERR_PROXY_AUTH_UNSUPPORTED = -115,
+    ERR_BAD_SSL_CLIENT_AUTH_CERT = -117,
+    ERR_CONNECTION_TIMED_OUT = -118,
+    ERR_HOST_RESOLVER_QUEUE_TOO_LARGE = -119,
+    ERR_SOCKS_CONNECTION_FAILED = -120,
+    ERR_SOCKS_CONNECTION_HOST_UNREACHABLE = -121,
+    ERR_ALPN_NEGOTIATION_FAILED = -122,
+    ERR_SSL_NO_RENEGOTIATION = -123,
+    ERR_WINSOCK_UNEXPECTED_WRITTEN_BYTES = -124,
+    ERR_SSL_DECOMPRESSION_FAILURE_ALERT = -125,
+    ERR_SSL_BAD_RECORD_MAC_ALERT = -126,
+    ERR_PROXY_AUTH_REQUESTED = -127,
+    ERR_PROXY_CONNECTION_FAILED = -130,
+    ERR_MANDATORY_PROXY_CONFIGURATION_FAILED = -131,
+    ERR_PRECONNECT_MAX_SOCKET_LIMIT = -133,
+    ERR_SSL_CLIENT_AUTH_PRIVATE_KEY_ACCESS_DENIED = -134,
+    ERR_SSL_CLIENT_AUTH_CERT_NO_PRIVATE_KEY = -135,
+    ERR_PROXY_CERTIFICATE_INVALID = -136,
+    ERR_NAME_RESOLUTION_FAILED = -137,
+    ERR_NETWORK_ACCESS_DENIED = -138,
+    ERR_TEMPORARILY_THROTTLED = -139,
+    ERR_HTTPS_PROXY_TUNNEL_RESPONSE_REDIRECT = -140,
+    ERR_SSL_CLIENT_AUTH_SIGNATURE_FAILED = -141,
+    ERR_MSG_TOO_BIG = -142,
+    ERR_WS_PROTOCOL_ERROR = -145,
+    ERR_ADDRESS_IN_USE = -147,
+    ERR_SSL_HANDSHAKE_NOT_COMPLETED = -148,
+    ERR_SSL_BAD_PEER_PUBLIC_KEY = -149,
+    ERR_SSL_PINNED_KEY_NOT_IN_CERT_CHAIN = -150,
+    ERR_CLIENT_AUTH_CERT_TYPE_UNSUPPORTED = -151,
+    ERR_SSL_DECRYPT_ERROR_ALERT = -153,
+    ERR_WS_THROTTLE_QUEUE_TOO_LARGE = -154,
+    ERR_SSL_SERVER_CERT_CHANGED = -156,
+    ERR_SSL_UNRECOGNIZED_NAME_ALERT = -159,
+    ERR_SOCKET_SET_RECEIVE_BUFFER_SIZE_ERROR = -160,
+    ERR_SOCKET_SET_SEND_BUFFER_SIZE_ERROR = -161,
+    ERR_SOCKET_RECEIVE_BUFFER_SIZE_UNCHANGEABLE = -162,
+    ERR_SOCKET_SEND_BUFFER_SIZE_UNCHANGEABLE = -163,
+    ERR_SSL_CLIENT_AUTH_CERT_BAD_FORMAT = -164,
+    ERR_ICANN_NAME_COLLISION = -166,
+    ERR_SSL_SERVER_CERT_BAD_FORMAT = -167,
+    ERR_CT_STH_PARSING_FAILED = -168,
+    ERR_CT_STH_INCOMPLETE = -169,
+    ERR_UNABLE_TO_REUSE_CONNECTION_FOR_PROXY_AUTH = -170,
+    ERR_CT_CONSISTENCY_PROOF_PARSING_FAILED = -171,
+    ERR_SSL_OBSOLETE_CIPHER = -172,
+    ERR_WS_UPGRADE = -173,
+    ERR_READ_IF_READY_NOT_IMPLEMENTED = -174,
+    ERR_NO_BUFFER_SPACE = -176,
+    ERR_SSL_CLIENT_AUTH_NO_COMMON_ALGORITHMS = -177,
+    ERR_EARLY_DATA_REJECTED = -178,
+    ERR_WRONG_VERSION_ON_EARLY_DATA = -179,
+    ERR_TLS13_DOWNGRADE_DETECTED = -180,
+    ERR_SSL_KEY_USAGE_INCOMPATIBLE = -181,
+    ERR_INVALID_ECH_CONFIG_LIST = -182,
+    ERR_ECH_NOT_NEGOTIATED = -183,
+    ERR_ECH_FALLBACK_CERTIFICATE_INVALID = -184,
     ERR_CERT_COMMON_NAME_INVALID = -200,
     ERR_CERT_DATE_INVALID = -201,
     ERR_CERT_AUTHORITY_INVALID = -202,
@@ -1017,42 +1165,128 @@ pub enum cef_errorcode_t {
     ERR_CERT_REVOKED = -206,
     ERR_CERT_INVALID = -207,
     ERR_CERT_WEAK_SIGNATURE_ALGORITHM = -208,
-    /// -209 is available: was ERR_CERT_NOT_IN_DNS.
     ERR_CERT_NON_UNIQUE_NAME = -210,
-    /// -209 is available: was ERR_CERT_NOT_IN_DNS.
     ERR_CERT_WEAK_KEY = -211,
-    /// -209 is available: was ERR_CERT_NOT_IN_DNS.
     ERR_CERT_NAME_CONSTRAINT_VIOLATION = -212,
-    /// -209 is available: was ERR_CERT_NOT_IN_DNS.
     ERR_CERT_VALIDITY_TOO_LONG = -213,
-    /// -209 is available: was ERR_CERT_NOT_IN_DNS.
+    ERR_CERTIFICATE_TRANSPARENCY_REQUIRED = -214,
+    ERR_CERT_SYMANTEC_LEGACY = -215,
+    ERR_CERT_KNOWN_INTERCEPTION_BLOCKED = -217,
+    ERR_CERT_END = -219,
     ERR_INVALID_URL = -300,
-    /// -209 is available: was ERR_CERT_NOT_IN_DNS.
     ERR_DISALLOWED_URL_SCHEME = -301,
-    /// -209 is available: was ERR_CERT_NOT_IN_DNS.
     ERR_UNKNOWN_URL_SCHEME = -302,
-    /// -209 is available: was ERR_CERT_NOT_IN_DNS.
+    ERR_INVALID_REDIRECT = -303,
     ERR_TOO_MANY_REDIRECTS = -310,
-    /// -209 is available: was ERR_CERT_NOT_IN_DNS.
     ERR_UNSAFE_REDIRECT = -311,
-    /// -209 is available: was ERR_CERT_NOT_IN_DNS.
     ERR_UNSAFE_PORT = -312,
-    /// -209 is available: was ERR_CERT_NOT_IN_DNS.
     ERR_INVALID_RESPONSE = -320,
-    /// -209 is available: was ERR_CERT_NOT_IN_DNS.
     ERR_INVALID_CHUNKED_ENCODING = -321,
-    /// -209 is available: was ERR_CERT_NOT_IN_DNS.
     ERR_METHOD_NOT_SUPPORTED = -322,
-    /// -209 is available: was ERR_CERT_NOT_IN_DNS.
     ERR_UNEXPECTED_PROXY_AUTH = -323,
-    /// -209 is available: was ERR_CERT_NOT_IN_DNS.
     ERR_EMPTY_RESPONSE = -324,
-    /// -209 is available: was ERR_CERT_NOT_IN_DNS.
     ERR_RESPONSE_HEADERS_TOO_BIG = -325,
-    /// -209 is available: was ERR_CERT_NOT_IN_DNS.
+    ERR_PAC_SCRIPT_FAILED = -327,
+    ERR_REQUEST_RANGE_NOT_SATISFIABLE = -328,
+    ERR_MALFORMED_IDENTITY = -329,
+    ERR_CONTENT_DECODING_FAILED = -330,
+    ERR_NETWORK_IO_SUSPENDED = -331,
+    ERR_SYN_REPLY_NOT_RECEIVED = -332,
+    ERR_ENCODING_CONVERSION_FAILED = -333,
+    ERR_UNRECOGNIZED_FTP_DIRECTORY_LISTING_FORMAT = -334,
+    ERR_NO_SUPPORTED_PROXIES = -336,
+    ERR_HTTP2_PROTOCOL_ERROR = -337,
+    ERR_INVALID_AUTH_CREDENTIALS = -338,
+    ERR_UNSUPPORTED_AUTH_SCHEME = -339,
+    ERR_ENCODING_DETECTION_FAILED = -340,
+    ERR_MISSING_AUTH_CREDENTIALS = -341,
+    ERR_UNEXPECTED_SECURITY_LIBRARY_STATUS = -342,
+    ERR_MISCONFIGURED_AUTH_ENVIRONMENT = -343,
+    ERR_UNDOCUMENTED_SECURITY_LIBRARY_STATUS = -344,
+    ERR_RESPONSE_BODY_TOO_BIG_TO_DRAIN = -345,
+    ERR_RESPONSE_HEADERS_MULTIPLE_CONTENT_LENGTH = -346,
+    ERR_INCOMPLETE_HTTP2_HEADERS = -347,
+    ERR_PAC_NOT_IN_DHCP = -348,
+    ERR_RESPONSE_HEADERS_MULTIPLE_CONTENT_DISPOSITION = -349,
+    ERR_RESPONSE_HEADERS_MULTIPLE_LOCATION = -350,
+    ERR_HTTP2_SERVER_REFUSED_STREAM = -351,
+    ERR_HTTP2_PING_FAILED = -352,
+    ERR_CONTENT_LENGTH_MISMATCH = -354,
+    ERR_INCOMPLETE_CHUNKED_ENCODING = -355,
+    ERR_QUIC_PROTOCOL_ERROR = -356,
+    ERR_RESPONSE_HEADERS_TRUNCATED = -357,
+    ERR_QUIC_HANDSHAKE_FAILED = -358,
+    ERR_HTTP2_INADEQUATE_TRANSPORT_SECURITY = -360,
+    ERR_HTTP2_FLOW_CONTROL_ERROR = -361,
+    ERR_HTTP2_FRAME_SIZE_ERROR = -362,
+    ERR_HTTP2_COMPRESSION_ERROR = -363,
+    ERR_PROXY_AUTH_REQUESTED_WITH_NO_CONNECTION = -364,
+    ERR_HTTP_1_1_REQUIRED = -365,
+    ERR_PROXY_HTTP_1_1_REQUIRED = -366,
+    ERR_PAC_SCRIPT_TERMINATED = -367,
+    ERR_INVALID_HTTP_RESPONSE = -370,
+    ERR_CONTENT_DECODING_INIT_FAILED = -371,
+    ERR_HTTP2_RST_STREAM_NO_ERROR_RECEIVED = -372,
+    ERR_HTTP2_PUSHED_STREAM_NOT_AVAILABLE = -373,
+    ERR_HTTP2_CLAIMED_PUSHED_STREAM_RESET_BY_SERVER = -374,
+    ERR_TOO_MANY_RETRIES = -375,
+    ERR_HTTP2_STREAM_CLOSED = -376,
+    ERR_HTTP2_CLIENT_REFUSED_STREAM = -377,
+    ERR_HTTP2_PUSHED_RESPONSE_DOES_NOT_MATCH = -378,
+    ERR_HTTP_RESPONSE_CODE_FAILURE = -379,
+    ERR_QUIC_CERT_ROOT_NOT_KNOWN = -380,
+    ERR_QUIC_GOAWAY_REQUEST_CAN_BE_RETRIED = -381,
     ERR_CACHE_MISS = -400,
-    /// -209 is available: was ERR_CERT_NOT_IN_DNS.
+    ERR_CACHE_READ_FAILURE = -401,
+    ERR_CACHE_WRITE_FAILURE = -402,
+    ERR_CACHE_OPERATION_NOT_SUPPORTED = -403,
+    ERR_CACHE_OPEN_FAILURE = -404,
+    ERR_CACHE_CREATE_FAILURE = -405,
+    ERR_CACHE_RACE = -406,
+    ERR_CACHE_CHECKSUM_READ_FAILURE = -407,
+    ERR_CACHE_CHECKSUM_MISMATCH = -408,
+    ERR_CACHE_LOCK_TIMEOUT = -409,
+    ERR_CACHE_AUTH_FAILURE_AFTER_READ = -410,
+    ERR_CACHE_ENTRY_NOT_SUITABLE = -411,
+    ERR_CACHE_DOOM_FAILURE = -412,
+    ERR_CACHE_OPEN_OR_CREATE_FAILURE = -413,
     ERR_INSECURE_RESPONSE = -501,
+    ERR_NO_PRIVATE_KEY_FOR_CERT = -502,
+    ERR_ADD_USER_CERT_FAILED = -503,
+    ERR_INVALID_SIGNED_EXCHANGE = -504,
+    ERR_INVALID_WEB_BUNDLE = -505,
+    ERR_TRUST_TOKEN_OPERATION_FAILED = -506,
+    ERR_TRUST_TOKEN_OPERATION_SUCCESS_WITHOUT_SENDING_REQUEST = -507,
+    ERR_FTP_FAILED = -601,
+    ERR_FTP_SERVICE_UNAVAILABLE = -602,
+    ERR_FTP_TRANSFER_ABORTED = -603,
+    ERR_FTP_FILE_BUSY = -604,
+    ERR_FTP_SYNTAX_ERROR = -605,
+    ERR_FTP_COMMAND_NOT_SUPPORTED = -606,
+    ERR_FTP_BAD_COMMAND_SEQUENCE = -607,
+    ERR_PKCS12_IMPORT_BAD_PASSWORD = -701,
+    ERR_PKCS12_IMPORT_FAILED = -702,
+    ERR_IMPORT_CA_CERT_NOT_CA = -703,
+    ERR_IMPORT_CERT_ALREADY_EXISTS = -704,
+    ERR_IMPORT_CA_CERT_FAILED = -705,
+    ERR_IMPORT_SERVER_CERT_FAILED = -706,
+    ERR_PKCS12_IMPORT_INVALID_MAC = -707,
+    ERR_PKCS12_IMPORT_INVALID_FILE = -708,
+    ERR_PKCS12_IMPORT_UNSUPPORTED = -709,
+    ERR_KEY_GENERATION_FAILED = -710,
+    ERR_PRIVATE_KEY_EXPORT_FAILED = -712,
+    ERR_SELF_SIGNED_CERT_GENERATION_FAILED = -713,
+    ERR_CERT_DATABASE_CHANGED = -714,
+    ERR_DNS_MALFORMED_RESPONSE = -800,
+    ERR_DNS_SERVER_REQUIRES_TCP = -801,
+    ERR_DNS_SERVER_FAILED = -802,
+    ERR_DNS_TIMED_OUT = -803,
+    ERR_DNS_CACHE_MISS = -804,
+    ERR_DNS_SEARCH_EMPTY = -805,
+    ERR_DNS_SORT_ERROR = -806,
+    ERR_DNS_SECURE_RESOLVER_HOSTNAME_RESOLUTION_FAILED = -808,
+    ERR_DNS_NAME_HTTPS_ONLY = -809,
+    ERR_DNS_REQUEST_CANCELLED = -810,
 }
 #[repr(i32)]
 ///
@@ -1131,6 +1365,28 @@ pub enum cef_drag_operations_mask_t {
     DRAG_OPERATION_DELETE = 32,
     DRAG_OPERATION_EVERY = -1,
 }
+impl cef_text_input_mode_t {
+    pub const CEF_TEXT_INPUT_MODE_MAX: cef_text_input_mode_t =
+        cef_text_input_mode_t::CEF_TEXT_INPUT_MODE_SEARCH;
+}
+#[repr(i32)]
+///
+/// Input mode of a virtual keyboard. These constants match their equivalents
+/// in Chromium's text_input_mode.h and should not be renumbered.
+/// See https://html.spec.whatwg.org/#input-modalities:-the-inputmode-attribute
+///
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum cef_text_input_mode_t {
+    CEF_TEXT_INPUT_MODE_DEFAULT = 0,
+    CEF_TEXT_INPUT_MODE_NONE = 1,
+    CEF_TEXT_INPUT_MODE_TEXT = 2,
+    CEF_TEXT_INPUT_MODE_TEL = 3,
+    CEF_TEXT_INPUT_MODE_URL = 4,
+    CEF_TEXT_INPUT_MODE_EMAIL = 5,
+    CEF_TEXT_INPUT_MODE_NUMERIC = 6,
+    CEF_TEXT_INPUT_MODE_DECIMAL = 7,
+    CEF_TEXT_INPUT_MODE_SEARCH = 8,
+}
 #[repr(i32)]
 ///
 /// V8 access control values.
@@ -1170,7 +1426,8 @@ pub enum cef_postdataelement_type_t {
 }
 #[repr(i32)]
 ///
-/// Resource type for a request.
+/// Resource type for a request. These constants match their equivalents in
+/// Chromium's ResourceType and should not be renumbered.
 ///
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum cef_resource_type_t {
@@ -1247,6 +1504,14 @@ pub enum cef_resource_type_t {
     /// A resource that a plugin requested.
     ///
     RT_PLUGIN_RESOURCE = 17,
+    ///
+    /// A main-frame service worker navigation preload request.
+    ///
+    RT_NAVIGATION_PRELOAD_MAIN_FRAME = 19,
+    ///
+    /// A sub-frame service worker navigation preload request.
+    ///
+    RT_NAVIGATION_PRELOAD_SUB_FRAME = 20,
 }
 #[repr(i32)]
 ///
@@ -1262,9 +1527,8 @@ pub enum cef_transition_type_t {
     ///
     TT_LINK = 0,
     ///
-    /// Source is some other "explicit" navigation action such as creating a new
-    /// browser or using the LoadURL function. This is also the default value
-    /// for navigations where the actual type is unknown.
+    /// Source is some other "explicit" navigation. This is the default value for
+    /// navigations where the actual type is unknown. See also TT_DIRECT_LOAD_FLAG.
     ///
     TT_EXPLICIT = 1,
     ///
@@ -1305,8 +1569,13 @@ pub enum cef_transition_type_t {
     TT_BLOCKED_FLAG = 8388608,
     ///
     /// Used the Forward or Back function to navigate among browsing history.
+    /// Will be ORed to the transition type for the original load.
     ///
     TT_FORWARD_BACK_FLAG = 16777216,
+    ///
+    /// Loaded a URL directly via CreateBrowser, LoadURL or LoadRequest.
+    ///
+    TT_DIRECT_LOAD_FLAG = 33554432,
     ///
     /// The beginning of a navigation chain.
     ///
@@ -1360,61 +1629,6 @@ pub enum cef_urlrequest_status_t {
     ///
     UR_FAILED = 4,
 }
-///
-/// Structure representing a point.
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_point_t {
-    pub x: ::std::os::raw::c_int,
-    pub y: ::std::os::raw::c_int,
-}
-///
-/// Structure representing a point.
-///
-pub type cef_point_t = _cef_point_t;
-///
-/// Structure representing a rectangle.
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_rect_t {
-    pub x: ::std::os::raw::c_int,
-    pub y: ::std::os::raw::c_int,
-    pub width: ::std::os::raw::c_int,
-    pub height: ::std::os::raw::c_int,
-}
-///
-/// Structure representing a rectangle.
-///
-pub type cef_rect_t = _cef_rect_t;
-///
-/// Structure representing a size.
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_size_t {
-    pub width: ::std::os::raw::c_int,
-    pub height: ::std::os::raw::c_int,
-}
-///
-/// Structure representing a size.
-///
-pub type cef_size_t = _cef_size_t;
-///
-/// Structure representing a range.
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_range_t {
-    pub from: ::std::os::raw::c_int,
-    pub to: ::std::os::raw::c_int,
-}
-///
-/// Structure representing a range.
-///
-pub type cef_range_t = _cef_range_t;
-///
 /// Structure representing a draggable region.
 ///
 #[repr(C)]
@@ -1429,7 +1643,6 @@ pub struct _cef_draggable_region_t {
     ///
     pub draggable: ::std::os::raw::c_int,
 }
-///
 /// Structure representing a draggable region.
 ///
 pub type cef_draggable_region_t = _cef_draggable_region_t;
@@ -1447,9 +1660,6 @@ pub enum cef_process_id_t {
     /// Renderer process.
     ///
     PID_RENDERER = 1,
-}
-impl cef_thread_id_t {
-    pub const TID_FILE: cef_thread_id_t = cef_thread_id_t::TID_FILE_BACKGROUND;
 }
 #[repr(i32)]
 ///
@@ -1507,7 +1717,7 @@ pub enum cef_thread_id_t {
     ///
     /// The main thread in the renderer. Used for all WebKit and V8 interaction.
     /// Tasks may be posted to this thread after
-    /// CefRenderProcessHandler::OnRenderThreadCreated but are not guaranteed to
+    /// CefRenderProcessHandler::OnWebKitInitialized but are not guaranteed to
     /// run before sub-process termination (sub-processes may be killed at any time
     /// without warning).
     ///
@@ -1623,6 +1833,83 @@ pub struct _cef_mouse_event_t {
 }
 #[repr(i32)]
 ///
+/// Touch points states types.
+///
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum cef_touch_event_type_t {
+    CEF_TET_RELEASED = 0,
+    CEF_TET_PRESSED = 1,
+    CEF_TET_MOVED = 2,
+    CEF_TET_CANCELLED = 3,
+}
+#[repr(i32)]
+///
+/// The device type that caused the event.
+///
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum cef_pointer_type_t {
+    CEF_POINTER_TYPE_TOUCH = 0,
+    CEF_POINTER_TYPE_MOUSE = 1,
+    CEF_POINTER_TYPE_PEN = 2,
+    CEF_POINTER_TYPE_ERASER = 3,
+    CEF_POINTER_TYPE_UNKNOWN = 4,
+}
+///
+/// Structure representing touch event information.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_touch_event_t {
+    ///
+    /// Id of a touch point. Must be unique per touch, can be any number except -1.
+    /// Note that a maximum of 16 concurrent touches will be tracked; touches
+    /// beyond that will be ignored.
+    ///
+    pub id: ::std::os::raw::c_int,
+    ///
+    /// X coordinate relative to the left side of the view.
+    ///
+    pub x: f32,
+    ///
+    /// Y coordinate relative to the top side of the view.
+    ///
+    pub y: f32,
+    ///
+    /// X radius in pixels. Set to 0 if not applicable.
+    ///
+    pub radius_x: f32,
+    ///
+    /// Y radius in pixels. Set to 0 if not applicable.
+    ///
+    pub radius_y: f32,
+    ///
+    /// Rotation angle in radians. Set to 0 if not applicable.
+    ///
+    pub rotation_angle: f32,
+    ///
+    /// The normalized pressure of the pointer input in the range of [0,1].
+    /// Set to 0 if not applicable.
+    ///
+    pub pressure: f32,
+    ///
+    /// The state of the touch point. Touches begin with one CEF_TET_PRESSED event
+    /// followed by zero or more CEF_TET_MOVED events and finally one
+    /// CEF_TET_RELEASED or CEF_TET_CANCELLED event. Events not respecting this
+    /// order will be ignored.
+    ///
+    pub type_: cef_touch_event_type_t,
+    ///
+    /// Bit flags describing any pressed modifier keys. See
+    /// cef_event_flags_t for values.
+    ///
+    pub modifiers: uint32,
+    ///
+    /// The device type that caused the event.
+    ///
+    pub pointer_type: cef_pointer_type_t,
+}
+#[repr(i32)]
+///
 /// Paint element types.
 ///
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -1654,6 +1941,10 @@ pub enum cef_event_flags_t {
     EVENTFLAG_IS_LEFT = 1024,
     /// Mac OS-X command key.
     EVENTFLAG_IS_RIGHT = 2048,
+    /// Mac OS-X command key.
+    EVENTFLAG_ALTGR_DOWN = 4096,
+    /// Mac OS-X command key.
+    EVENTFLAG_IS_REPEAT = 8192,
 }
 #[repr(i32)]
 ///
@@ -1705,7 +1996,8 @@ pub enum cef_context_menu_type_flags_t {
 }
 #[repr(i32)]
 ///
-/// Supported context menu media types.
+/// Supported context menu media types. These constants match their equivalents
+/// in Chromium's ContextMenuDataMediaType and should not be renumbered.
 ///
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum cef_context_menu_media_type_t {
@@ -1726,35 +2018,46 @@ pub enum cef_context_menu_media_type_t {
     ///
     CM_MEDIATYPE_AUDIO = 3,
     ///
+    /// An canvas node is selected.
+    ///
+    CM_MEDIATYPE_CANVAS = 4,
+    ///
     /// A file node is selected.
     ///
-    CM_MEDIATYPE_FILE = 4,
+    CM_MEDIATYPE_FILE = 5,
     ///
     /// A plugin node is selected.
     ///
-    CM_MEDIATYPE_PLUGIN = 5,
+    CM_MEDIATYPE_PLUGIN = 6,
 }
 #[repr(i32)]
 ///
-/// Supported context menu media state bit flags.
+/// Supported context menu media state bit flags. These constants match their
+/// equivalents in Chromium's ContextMenuData::MediaFlags and should not be
+/// renumbered.
 ///
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum cef_context_menu_media_state_flags_t {
     CM_MEDIAFLAG_NONE = 0,
-    CM_MEDIAFLAG_ERROR = 1,
+    CM_MEDIAFLAG_IN_ERROR = 1,
     CM_MEDIAFLAG_PAUSED = 2,
     CM_MEDIAFLAG_MUTED = 4,
     CM_MEDIAFLAG_LOOP = 8,
     CM_MEDIAFLAG_CAN_SAVE = 16,
     CM_MEDIAFLAG_HAS_AUDIO = 32,
-    CM_MEDIAFLAG_HAS_VIDEO = 64,
-    CM_MEDIAFLAG_CONTROL_ROOT_ELEMENT = 128,
+    CM_MEDIAFLAG_CAN_TOGGLE_CONTROLS = 64,
+    CM_MEDIAFLAG_CONTROLS = 128,
     CM_MEDIAFLAG_CAN_PRINT = 256,
     CM_MEDIAFLAG_CAN_ROTATE = 512,
+    CM_MEDIAFLAG_CAN_PICTURE_IN_PICTURE = 1024,
+    CM_MEDIAFLAG_PICTURE_IN_PICTURE = 2048,
+    CM_MEDIAFLAG_CAN_LOOP = 4096,
 }
 #[repr(i32)]
 ///
-/// Supported context menu edit state bit flags.
+/// Supported context menu edit state bit flags. These constants match their
+/// equivalents in Chromium's ContextMenuDataEditFlags and should not be
+/// renumbered.
 ///
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum cef_context_menu_edit_state_flags_t {
@@ -1767,6 +2070,7 @@ pub enum cef_context_menu_edit_state_flags_t {
     CM_EDITFLAG_CAN_DELETE = 32,
     CM_EDITFLAG_CAN_SELECT_ALL = 64,
     CM_EDITFLAG_CAN_TRANSLATE = 128,
+    CM_EDITFLAG_CAN_EDIT_RICHLY = 256,
 }
 #[repr(i32)]
 ///
@@ -2038,7 +2342,13 @@ pub enum cef_cursor_type_t {
     CT_ZOOMOUT = 40,
     CT_GRAB = 41,
     CT_GRABBING = 42,
-    CT_CUSTOM = 43,
+    CT_MIDDLE_PANNING_VERTICAL = 43,
+    CT_MIDDLE_PANNING_HORIZONTAL = 44,
+    CT_CUSTOM = 45,
+    CT_DND_NONE = 46,
+    CT_DND_MOVE = 47,
+    CT_DND_COPY = 48,
+    CT_DND_LINK = 49,
 }
 ///
 /// Structure representing cursor information. |buffer| will be
@@ -2105,13 +2415,13 @@ pub struct _cef_pdf_print_settings_t {
     ///
     pub scale_factor: ::std::os::raw::c_int,
     ///
-    /// Margins in millimeters. Only used if |margin_type| is set to
+    /// Margins in points. Only used if |margin_type| is set to
     /// PDF_PRINT_MARGIN_CUSTOM.
     ///
-    pub margin_top: f64,
-    pub margin_right: f64,
-    pub margin_bottom: f64,
-    pub margin_left: f64,
+    pub margin_top: ::std::os::raw::c_int,
+    pub margin_right: ::std::os::raw::c_int,
+    pub margin_bottom: ::std::os::raw::c_int,
+    pub margin_left: ::std::os::raw::c_int,
     ///
     /// Margin type.
     ///
@@ -2154,33 +2464,13 @@ pub enum cef_scale_factor_t {
     SCALE_FACTOR_250P = 8,
     SCALE_FACTOR_300P = 9,
 }
-#[repr(i32)]
-///
-/// Plugin policies supported by CefRequestContextHandler::OnBeforePluginLoad.
-///
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum cef_plugin_policy_t {
-    ///
-    /// Allow the content.
-    ///
-    PLUGIN_POLICY_ALLOW = 0,
-    ///
-    /// Allow important content and block unimportant content based on heuristics.
-    /// The user can manually load blocked content.
-    ///
-    PLUGIN_POLICY_DETECT_IMPORTANT = 1,
-    ///
-    /// Block the content. The user can manually load blocked content.
-    ///
-    PLUGIN_POLICY_BLOCK = 2,
-    ///
-    /// Disable the content. The user cannot load disabled content.
-    ///
-    PLUGIN_POLICY_DISABLE = 3,
-}
 impl cef_referrer_policy_t {
     pub const REFERRER_POLICY_DEFAULT: cef_referrer_policy_t =
         cef_referrer_policy_t::REFERRER_POLICY_CLEAR_REFERRER_ON_TRANSITION_FROM_SECURE_TO_INSECURE;
+}
+impl cef_referrer_policy_t {
+    pub const REFERRER_POLICY_LAST_VALUE: cef_referrer_policy_t =
+        cef_referrer_policy_t::REFERRER_POLICY_NO_REFERRER;
 }
 #[repr(i32)]
 ///
@@ -2231,8 +2521,6 @@ pub enum cef_referrer_policy_t {
     /// Always clear the referrer regardless of the request destination.
     ///
     REFERRER_POLICY_NO_REFERRER = 7,
-    /// Always the last value in this enumeration.
-    REFERRER_POLICY_LAST_VALUE = 8,
 }
 #[repr(i32)]
 ///
@@ -2315,7 +2603,7 @@ pub enum cef_ssl_version_t {
     SSL_CONNECTION_VERSION_TLS1 = 3,
     SSL_CONNECTION_VERSION_TLS1_1 = 4,
     SSL_CONNECTION_VERSION_TLS1_2 = 5,
-    /// Reserve 6 for TLS 1.3.
+    SSL_CONNECTION_VERSION_TLS1_3 = 6,
     SSL_CONNECTION_VERSION_QUIC = 7,
 }
 #[repr(i32)]
@@ -2327,28 +2615,29 @@ pub enum cef_ssl_content_status_t {
     SSL_CONTENT_DISPLAYED_INSECURE_CONTENT = 1,
     SSL_CONTENT_RAN_INSECURE_CONTENT = 2,
 }
+///
+/// Structure representing a range.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_range_t {
+    pub from: ::std::os::raw::c_int,
+    pub to: ::std::os::raw::c_int,
+}
+///
+/// Structure representing a range.
+///
+pub type cef_range_t = _cef_range_t;
 #[repr(i32)]
 ///
-/// Error codes for CDM registration. See cef_web_plugin.h for details.
+/// Composition underline style.
 ///
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum cef_cdm_registration_error_t {
-    ///
-    /// No error. Registration completed successfully.
-    ///
-    CEF_CDM_REGISTRATION_ERROR_NONE = 0,
-    ///
-    /// Required files or manifest contents are missing.
-    ///
-    CEF_CDM_REGISTRATION_ERROR_INCORRECT_CONTENTS = 1,
-    ///
-    /// The CDM is incompatible with the current Chromium version.
-    ///
-    CEF_CDM_REGISTRATION_ERROR_INCOMPATIBLE = 2,
-    ///
-    /// CDM registration is not supported at this time.
-    ///
-    CEF_CDM_REGISTRATION_ERROR_NOT_SUPPORTED = 3,
+pub enum cef_composition_underline_style_t {
+    CEF_CUS_SOLID = 0,
+    CEF_CUS_DOT = 1,
+    CEF_CUS_DASH = 2,
+    CEF_CUS_NONE = 3,
 }
 ///
 /// Structure representing IME composition underline information. This is a thin
@@ -2374,6 +2663,10 @@ pub struct _cef_composition_underline_t {
     /// Set to true (1) for thick underline.
     ///
     pub thick: ::std::os::raw::c_int,
+    ///
+    /// Style.
+    ///
+    pub style: cef_composition_underline_style_t,
 }
 ///
 /// Structure representing IME composition underline information. This is a thin
@@ -2381,6 +2674,171 @@ pub struct _cef_composition_underline_t {
 /// sync with that.
 ///
 pub type cef_composition_underline_t = _cef_composition_underline_t;
+impl cef_channel_layout_t {
+    pub const CEF_CHANNEL_LAYOUT_MAX: cef_channel_layout_t =
+        cef_channel_layout_t::CEF_CHANNEL_LAYOUT_BITSTREAM;
+}
+#[repr(i32)]
+///
+/// Enumerates the various representations of the ordering of audio channels.
+/// Must be kept synchronized with media::ChannelLayout from Chromium.
+/// See media\base\channel_layout.h
+///
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum cef_channel_layout_t {
+    CEF_CHANNEL_LAYOUT_NONE = 0,
+    CEF_CHANNEL_LAYOUT_UNSUPPORTED = 1,
+    /// Front C
+    CEF_CHANNEL_LAYOUT_MONO = 2,
+    /// Front L, Front R
+    CEF_CHANNEL_LAYOUT_STEREO = 3,
+    /// Front L, Front R, Back C
+    CEF_CHANNEL_LAYOUT_2_1 = 4,
+    /// Front L, Front R, Front C
+    CEF_CHANNEL_LAYOUT_SURROUND = 5,
+    /// Front L, Front R, Front C, Back C
+    CEF_CHANNEL_LAYOUT_4_0 = 6,
+    /// Front L, Front R, Side L, Side R
+    CEF_CHANNEL_LAYOUT_2_2 = 7,
+    /// Front L, Front R, Back L, Back R
+    CEF_CHANNEL_LAYOUT_QUAD = 8,
+    /// Front L, Front R, Front C, Side L, Side R
+    CEF_CHANNEL_LAYOUT_5_0 = 9,
+    /// Front L, Front R, Front C, LFE, Side L, Side R
+    CEF_CHANNEL_LAYOUT_5_1 = 10,
+    /// Front L, Front R, Front C, Back L, Back R
+    CEF_CHANNEL_LAYOUT_5_0_BACK = 11,
+    /// Front L, Front R, Front C, LFE, Back L, Back R
+    CEF_CHANNEL_LAYOUT_5_1_BACK = 12,
+    /// Front L, Front R, Front C, Side L, Side R, Back L, Back R
+    CEF_CHANNEL_LAYOUT_7_0 = 13,
+    /// Front L, Front R, Front C, LFE, Side L, Side R, Back L, Back R
+    CEF_CHANNEL_LAYOUT_7_1 = 14,
+    /// Front L, Front R, Front C, LFE, Side L, Side R, Front LofC, Front RofC
+    CEF_CHANNEL_LAYOUT_7_1_WIDE = 15,
+    /// Stereo L, Stereo R
+    CEF_CHANNEL_LAYOUT_STEREO_DOWNMIX = 16,
+    /// Stereo L, Stereo R, LFE
+    CEF_CHANNEL_LAYOUT_2POINT1 = 17,
+    /// Stereo L, Stereo R, Front C, LFE
+    CEF_CHANNEL_LAYOUT_3_1 = 18,
+    /// Stereo L, Stereo R, Front C, Rear C, LFE
+    CEF_CHANNEL_LAYOUT_4_1 = 19,
+    /// Stereo L, Stereo R, Front C, Side L, Side R, Back C
+    CEF_CHANNEL_LAYOUT_6_0 = 20,
+    /// Stereo L, Stereo R, Side L, Side R, Front LofC, Front RofC
+    CEF_CHANNEL_LAYOUT_6_0_FRONT = 21,
+    /// Stereo L, Stereo R, Front C, Rear L, Rear R, Rear C
+    CEF_CHANNEL_LAYOUT_HEXAGONAL = 22,
+    /// Stereo L, Stereo R, Front C, LFE, Side L, Side R, Rear Center
+    CEF_CHANNEL_LAYOUT_6_1 = 23,
+    /// Stereo L, Stereo R, Front C, LFE, Back L, Back R, Rear Center
+    CEF_CHANNEL_LAYOUT_6_1_BACK = 24,
+    /// Stereo L, Stereo R, Side L, Side R, Front LofC, Front RofC, LFE
+    CEF_CHANNEL_LAYOUT_6_1_FRONT = 25,
+    /// Front L, Front R, Front C, Side L, Side R, Front LofC, Front RofC
+    CEF_CHANNEL_LAYOUT_7_0_FRONT = 26,
+    /// Front L, Front R, Front C, LFE, Back L, Back R, Front LofC, Front RofC
+    CEF_CHANNEL_LAYOUT_7_1_WIDE_BACK = 27,
+    /// Front L, Front R, Front C, Side L, Side R, Rear L, Back R, Back C.
+    CEF_CHANNEL_LAYOUT_OCTAGONAL = 28,
+    /// Channels are not explicitly mapped to speakers.
+    CEF_CHANNEL_LAYOUT_DISCRETE = 29,
+    /// Front L, Front R, Front C. Front C contains the keyboard mic audio. This
+    /// layout is only intended for input for WebRTC. The Front C channel
+    /// is stripped away in the WebRTC audio input pipeline and never seen outside
+    /// of that.
+    CEF_CHANNEL_LAYOUT_STEREO_AND_KEYBOARD_MIC = 30,
+    /// Front L, Front R, Side L, Side R, LFE
+    CEF_CHANNEL_LAYOUT_4_1_QUAD_SIDE = 31,
+    /// Actual channel layout is specified in the bitstream and the actual channel
+    /// count is unknown at Chromium media pipeline level (useful for audio
+    /// pass-through mode).
+    CEF_CHANNEL_LAYOUT_BITSTREAM = 32,
+}
+///
+/// Structure representing the audio parameters for setting up the audio handler.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_audio_parameters_t {
+    ///
+    /// Layout of the audio channels
+    ///
+    pub channel_layout: cef_channel_layout_t,
+    ///
+    /// Sample rate
+    ///
+    pub sample_rate: ::std::os::raw::c_int,
+    ///
+    /// Number of frames per buffer
+    ///
+    pub frames_per_buffer: ::std::os::raw::c_int,
+}
+///
+/// Structure representing the audio parameters for setting up the audio handler.
+///
+pub type cef_audio_parameters_t = _cef_audio_parameters_t;
+#[repr(i32)]
+///
+/// Result codes for CefMediaRouter::CreateRoute. Should be kept in sync with
+/// Chromium's media_router::RouteRequestResult::ResultCode type.
+///
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum cef_media_route_create_result_t {
+    CEF_MRCR_UNKNOWN_ERROR = 0,
+    CEF_MRCR_OK = 1,
+    CEF_MRCR_TIMED_OUT = 2,
+    CEF_MRCR_ROUTE_NOT_FOUND = 3,
+    CEF_MRCR_SINK_NOT_FOUND = 4,
+    CEF_MRCR_INVALID_ORIGIN = 5,
+    CEF_MRCR_NO_SUPPORTED_PROVIDER = 7,
+    CEF_MRCR_CANCELLED = 8,
+    CEF_MRCR_ROUTE_ALREADY_EXISTS = 9,
+    CEF_MRCR_ROUTE_ALREADY_TERMINATED = 11,
+    /// The total number of values.
+    CEF_MRCR_TOTAL_COUNT = 12,
+}
+#[repr(i32)]
+///
+/// Connection state for a MediaRoute object.
+///
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum cef_media_route_connection_state_t {
+    CEF_MRCS_UNKNOWN = 0,
+    CEF_MRCS_CONNECTING = 1,
+    CEF_MRCS_CONNECTED = 2,
+    CEF_MRCS_CLOSED = 3,
+    CEF_MRCS_TERMINATED = 4,
+}
+#[repr(i32)]
+///
+/// Icon types for a MediaSink object. Should be kept in sync with Chromium's
+/// media_router::SinkIconType type.
+///
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum cef_media_sink_icon_type_t {
+    CEF_MSIT_CAST = 0,
+    CEF_MSIT_CAST_AUDIO_GROUP = 1,
+    CEF_MSIT_CAST_AUDIO = 2,
+    CEF_MSIT_MEETING = 3,
+    CEF_MSIT_HANGOUT = 4,
+    CEF_MSIT_EDUCATION = 5,
+    CEF_MSIT_WIRED_DISPLAY = 6,
+    CEF_MSIT_GENERIC = 7,
+    /// The total number of values.
+    CEF_MSIT_TOTAL_COUNT = 8,
+}
+///
+/// Device information for a MediaSink object.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_media_sink_device_info_t {
+    pub ip_address: cef_string_t,
+    pub port: ::std::os::raw::c_int,
+    pub model_name: cef_string_t,
+}
 ///
 /// CEF string maps are a set of key/value string pairs.
 ///
@@ -2555,6 +3013,12 @@ pub struct _cef_base_ref_counted_t {
     /// Returns true (1) if the current reference count is 1.
     ///
     pub has_one_ref: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_base_ref_counted_t) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Returns true (1) if the current reference count is at least 1.
+    ///
+    pub has_at_least_one_ref: ::std::option::Option<
         unsafe extern "C" fn(self_: *mut _cef_base_ref_counted_t) -> ::std::os::raw::c_int,
     >,
 }
@@ -3464,12 +3928,115 @@ extern "C" {
     pub fn cef_list_value_create() -> *mut cef_list_value_t;
 }
 ///
+/// Callback structure for cef_browser_host_t::AddDevToolsMessageObserver. The
+/// functions of this structure will be called on the browser process UI thread.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_dev_tools_message_observer_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Method that will be called on receipt of a DevTools protocol message.
+    /// |browser| is the originating browser instance. |message| is a UTF8-encoded
+    /// JSON dictionary representing either a function result or an event.
+    /// |message| is only valid for the scope of this callback and should be copied
+    /// if necessary. Return true (1) if the message was handled or false (0) if
+    /// the message should be further processed and passed to the
+    /// OnDevToolsMethodResult or OnDevToolsEvent functions as appropriate.
+    ///
+    /// Method result dictionaries include an "id" (int) value that identifies the
+    /// orginating function call sent from cef_browser_host_t::SendDevToolsMessage,
+    /// and optionally either a "result" (dictionary) or "error" (dictionary)
+    /// value. The "error" dictionary will contain "code" (int) and "message"
+    /// (string) values. Event dictionaries include a "function" (string) value and
+    /// optionally a "params" (dictionary) value. See the DevTools protocol
+    /// documentation at https://chromedevtools.github.io/devtools-protocol/ for
+    /// details of supported function calls and the expected "result" or "params"
+    /// dictionary contents. JSON dictionaries can be parsed using the CefParseJSON
+    /// function if desired, however be aware of performance considerations when
+    /// parsing large messages (some of which may exceed 1MB in size).
+    ///
+    pub on_dev_tools_message: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_dev_tools_message_observer_t,
+            browser: *mut _cef_browser_t,
+            message: *const ::std::os::raw::c_void,
+            message_size: usize,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Method that will be called after attempted execution of a DevTools protocol
+    /// function. |browser| is the originating browser instance. |message_id| is
+    /// the "id" value that identifies the originating function call message. If
+    /// the function succeeded |success| will be true (1) and |result| will be the
+    /// UTF8-encoded JSON "result" dictionary value (which may be NULL). If the
+    /// function failed |success| will be false (0) and |result| will be the
+    /// UTF8-encoded JSON "error" dictionary value. |result| is only valid for the
+    /// scope of this callback and should be copied if necessary. See the
+    /// OnDevToolsMessage documentation for additional details on |result|
+    /// contents.
+    ///
+    pub on_dev_tools_method_result: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_dev_tools_message_observer_t,
+            browser: *mut _cef_browser_t,
+            message_id: ::std::os::raw::c_int,
+            success: ::std::os::raw::c_int,
+            result: *const ::std::os::raw::c_void,
+            result_size: usize,
+        ),
+    >,
+    ///
+    /// Method that will be called on receipt of a DevTools protocol event.
+    /// |browser| is the originating browser instance. |function| is the "function"
+    /// value. |params| is the UTF8-encoded JSON "params" dictionary value (which
+    /// may be NULL). |params| is only valid for the scope of this callback and
+    /// should be copied if necessary. See the OnDevToolsMessage documentation for
+    /// additional details on |params| contents.
+    ///
+    pub on_dev_tools_event: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_dev_tools_message_observer_t,
+            browser: *mut _cef_browser_t,
+            method: *const cef_string_t,
+            params: *const ::std::os::raw::c_void,
+            params_size: usize,
+        ),
+    >,
+    ///
+    /// Method that will be called when the DevTools agent has attached. |browser|
+    /// is the originating browser instance. This will generally occur in response
+    /// to the first message sent while the agent is detached.
+    ///
+    pub on_dev_tools_agent_attached: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_dev_tools_message_observer_t,
+            browser: *mut _cef_browser_t,
+        ),
+    >,
+    ///
+    /// Method that will be called when the DevTools agent has detached. |browser|
+    /// is the originating browser instance. Any function results that were pending
+    /// before the agent became detached will not be delivered, and any active
+    /// event subscriptions will be canceled.
+    ///
+    pub on_dev_tools_agent_detached: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_dev_tools_message_observer_t,
+            browser: *mut _cef_browser_t,
+        ),
+    >,
+}
+///
 /// Container for a single image represented at different scale factors. All
 /// image representations should be the same size in density independent pixel
 /// (DIP) units. For example, if the image at scale factor 1.0 is 100x100 pixels
 /// then the image at scale factor 2.0 should be 200x200 pixels -- both images
 /// will display with a DIP size of 100x100 units. The functions of this
-/// structure must be called on the browser process UI thread.
+/// structure can be called on any browser process thread.
 ///
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -3635,7 +4202,7 @@ pub struct _cef_image_t {
 /// (DIP) units. For example, if the image at scale factor 1.0 is 100x100 pixels
 /// then the image at scale factor 2.0 should be 200x200 pixels -- both images
 /// will display with a DIP size of 100x100 units. The functions of this
-/// structure must be called on the browser process UI thread.
+/// structure can be called on any browser process thread.
 ///
 pub type cef_image_t = _cef_image_t;
 extern "C" {
@@ -4436,6 +5003,60 @@ pub struct _cef_domnode_t {
         ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_domnode_t) -> cef_rect_t>,
 }
 ///
+/// Structure representing a message. Can be used on any process and thread.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_process_message_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Returns true (1) if this object is valid. Do not call any other functions
+    /// if this function returns false (0).
+    ///
+    pub is_valid: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_process_message_t) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Returns true (1) if the values of this object are read-only. Some APIs may
+    /// expose read-only objects.
+    ///
+    pub is_read_only: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_process_message_t) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Returns a writable copy of this object.
+    ///
+    pub copy: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_process_message_t) -> *mut _cef_process_message_t,
+    >,
+    ///
+    /// Returns the message name.
+    ///
+    /// The resulting string must be freed by calling cef_string_userfree_free().
+    pub get_name: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_process_message_t) -> cef_string_userfree_t,
+    >,
+    ///
+    /// Returns the list of arguments.
+    ///
+    pub get_argument_list: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_process_message_t) -> *mut _cef_list_value_t,
+    >,
+}
+///
+/// Structure representing a message. Can be used on any process and thread.
+///
+pub type cef_process_message_t = _cef_process_message_t;
+extern "C" {
+    ///
+    /// Create a new cef_process_message_t object with the specified name.
+    ///
+    pub fn cef_process_message_create(name: *const cef_string_t) -> *mut cef_process_message_t;
+}
+///
 /// Structure used to represent a web request. The functions of this structure
 /// may be called on any thread.
 ///
@@ -4530,6 +5151,32 @@ pub struct _cef_request_t {
         unsafe extern "C" fn(self_: *mut _cef_request_t, headerMap: cef_string_multimap_t),
     >,
     ///
+    /// Returns the first header value for |name| or an NULL string if not found.
+    /// Will not return the Referer value if any. Use GetHeaderMap instead if
+    /// |name| might have multiple values.
+    ///
+    /// The resulting string must be freed by calling cef_string_userfree_free().
+    pub get_header_by_name: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_request_t,
+            name: *const cef_string_t,
+        ) -> cef_string_userfree_t,
+    >,
+    ///
+    /// Set the header |name| to |value|. If |overwrite| is true (1) any existing
+    /// values will be replaced with the new value. If |overwrite| is false (0) any
+    /// existing values will not be overwritten. The Referer value cannot be set
+    /// using this function.
+    ///
+    pub set_header_by_name: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_request_t,
+            name: *const cef_string_t,
+            value: *const cef_string_t,
+            overwrite: ::std::os::raw::c_int,
+        ),
+    >,
+    ///
     /// Set all values at one time.
     ///
     pub set: ::std::option::Option<
@@ -4587,8 +5234,8 @@ pub struct _cef_request_t {
     >,
     ///
     /// Returns the globally unique identifier for this request or 0 if not
-    /// specified. Can be used by cef_request_tHandler implementations in the
-    /// browser process to track a single request across multiple callbacks.
+    /// specified. Can be used by cef_resource_request_handler_t implementations in
+    /// the browser process to track a single request across multiple callbacks.
     ///
     pub get_identifier:
         ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_request_t) -> uint64>,
@@ -4847,6 +5494,10 @@ pub struct _cef_frame_t {
     ///
     /// Load the request represented by the |request| object.
     ///
+    /// WARNING: This function will fail with "bad IPC message" reason
+    /// INVALID_INITIATOR_ORIGIN (213) unless you first navigate to the request
+    /// origin using some other mechanism (LoadURL, link click, etc).
+    ///
     pub load_request: ::std::option::Option<
         unsafe extern "C" fn(self_: *mut _cef_frame_t, request: *mut _cef_request_t),
     >,
@@ -4855,18 +5506,6 @@ pub struct _cef_frame_t {
     ///
     pub load_url: ::std::option::Option<
         unsafe extern "C" fn(self_: *mut _cef_frame_t, url: *const cef_string_t),
-    >,
-    ///
-    /// Load the contents of |string_val| with the specified dummy |url|. |url|
-    /// should have a standard scheme (for example, http scheme) or behaviors like
-    /// link clicks and web security restrictions may not behave as expected.
-    ///
-    pub load_string: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_frame_t,
-            string_val: *const cef_string_t,
-            url: *const cef_string_t,
-        ),
     >,
     ///
     /// Execute a string of JavaScript code in this frame. The |script_url|
@@ -4944,6 +5583,50 @@ pub struct _cef_frame_t {
     ///
     pub visit_dom: ::std::option::Option<
         unsafe extern "C" fn(self_: *mut _cef_frame_t, visitor: *mut _cef_domvisitor_t),
+    >,
+    ///
+    /// Create a new URL request that will be treated as originating from this
+    /// frame and the associated browser. This request may be intercepted by the
+    /// client via cef_resource_request_handler_t or cef_scheme_handler_factory_t.
+    /// Use cef_urlrequest_t::Create instead if you do not want the request to have
+    /// this association, in which case it may be handled differently (see
+    /// documentation on that function). Requests may originate from both the
+    /// browser process and the render process.
+    ///
+    /// For requests originating from the browser process:
+    ///   - POST data may only contain a single element of type PDE_TYPE_FILE or
+    ///     PDE_TYPE_BYTES.
+    /// For requests originating from the render process:
+    ///   - POST data may only contain a single element of type PDE_TYPE_BYTES.
+    ///   - If the response contains Content-Disposition or Mime-Type header values
+    ///     that would not normally be rendered then the response may receive
+    ///     special handling inside the browser (for example, via the file download
+    ///     code path instead of the URL request code path).
+    ///
+    /// The |request| object will be marked as read-only after calling this
+    /// function.
+    ///
+    pub create_urlrequest: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_frame_t,
+            request: *mut _cef_request_t,
+            client: *mut _cef_urlrequest_client_t,
+        ) -> *mut _cef_urlrequest_t,
+    >,
+    ///
+    /// Send a message to the specified |target_process|. Ownership of the message
+    /// contents will be transferred and the |message| reference will be
+    /// invalidated. Message delivery is not guaranteed in all cases (for example,
+    /// if the browser is closing, navigating, or if the target process crashes).
+    /// Send an ACK message back from the target process if confirmation is
+    /// required.
+    ///
+    pub send_process_message: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_frame_t,
+            target_process: cef_process_id_t,
+            message: *mut _cef_process_message_t,
+        ),
     >,
 }
 ///
@@ -5231,58 +5914,15 @@ pub struct _cef_navigation_entry_t {
     >,
 }
 ///
-/// Structure representing a message. Can be used on any process and thread.
+/// Generic callback structure used for managing the lifespan of a registration.
 ///
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct _cef_process_message_t {
+pub struct _cef_registration_t {
     ///
     /// Base structure.
     ///
     pub base: cef_base_ref_counted_t,
-    ///
-    /// Returns true (1) if this object is valid. Do not call any other functions
-    /// if this function returns false (0).
-    ///
-    pub is_valid: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_process_message_t) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Returns true (1) if the values of this object are read-only. Some APIs may
-    /// expose read-only objects.
-    ///
-    pub is_read_only: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_process_message_t) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Returns a writable copy of this object.
-    ///
-    pub copy: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_process_message_t) -> *mut _cef_process_message_t,
-    >,
-    ///
-    /// Returns the message name.
-    ///
-    /// The resulting string must be freed by calling cef_string_userfree_free().
-    pub get_name: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_process_message_t) -> cef_string_userfree_t,
-    >,
-    ///
-    /// Returns the list of arguments.
-    ///
-    pub get_argument_list: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_process_message_t) -> *mut _cef_list_value_t,
-    >,
-}
-///
-/// Structure representing a message. Can be used on any process and thread.
-///
-pub type cef_process_message_t = _cef_process_message_t;
-extern "C" {
-    ///
-    /// Create a new cef_process_message_t object with the specified name.
-    ///
-    pub fn cef_process_message_create(name: *const cef_string_t) -> *mut cef_process_message_t;
 }
 ///
 /// Generic callback structure used for asynchronous continuation.
@@ -5331,20 +5971,7 @@ pub struct _cef_cookie_manager_t {
     ///
     pub base: cef_base_ref_counted_t,
     ///
-    /// Set the schemes supported by this manager. The default schemes ("http",
-    /// "https", "ws" and "wss") will always be supported. If |callback| is non-
-    /// NULL it will be executed asnychronously on the IO thread after the change
-    /// has been applied. Must be called before any cookies are accessed.
-    ///
-    pub set_supported_schemes: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_cookie_manager_t,
-            schemes: cef_string_list_t,
-            callback: *mut _cef_completion_callback_t,
-        ),
-    >,
-    ///
-    /// Visit all cookies on the IO thread. The returned cookies are ordered by
+    /// Visit all cookies on the UI thread. The returned cookies are ordered by
     /// longest path, then by earliest creation date. Returns false (0) if cookies
     /// cannot be accessed.
     ///
@@ -5355,7 +5982,7 @@ pub struct _cef_cookie_manager_t {
         ) -> ::std::os::raw::c_int,
     >,
     ///
-    /// Visit a subset of cookies on the IO thread. The results are filtered by the
+    /// Visit a subset of cookies on the UI thread. The results are filtered by the
     /// given url scheme, host, domain and path. If |includeHttpOnly| is true (1)
     /// HTTP-only cookies will also be included in the results. The returned
     /// cookies are ordered by longest path, then by earliest creation date.
@@ -5375,7 +6002,7 @@ pub struct _cef_cookie_manager_t {
     /// check for disallowed characters (e.g. the ';' character is disallowed
     /// within the cookie value attribute) and fail without setting the cookie if
     /// such characters are found. If |callback| is non-NULL it will be executed
-    /// asnychronously on the IO thread after the cookie has been set. Returns
+    /// asnychronously on the UI thread after the cookie has been set. Returns
     /// false (0) if an invalid URL is specified or if cookies cannot be accessed.
     ///
     pub set_cookie: ::std::option::Option<
@@ -5392,7 +6019,7 @@ pub struct _cef_cookie_manager_t {
     /// both will be deleted. If only |url| is specified all host cookies (but not
     /// domain cookies) irrespective of path will be deleted. If |url| is NULL all
     /// cookies for all hosts and domains will be deleted. If |callback| is non-
-    /// NULL it will be executed asnychronously on the IO thread after the cookies
+    /// NULL it will be executed asnychronously on the UI thread after the cookies
     /// have been deleted. Returns false (0) if a non-NULL invalid URL is specified
     /// or if cookies cannot be accessed. Cookies can alternately be deleted using
     /// the Visit*Cookies() functions.
@@ -5406,26 +6033,8 @@ pub struct _cef_cookie_manager_t {
         ) -> ::std::os::raw::c_int,
     >,
     ///
-    /// Sets the directory path that will be used for storing cookie data. If
-    /// |path| is NULL data will be stored in memory only. Otherwise, data will be
-    /// stored at the specified |path|. To persist session cookies (cookies without
-    /// an expiry date or validity interval) set |persist_session_cookies| to true
-    /// (1). Session cookies are generally intended to be transient and most Web
-    /// browsers do not persist them. If |callback| is non-NULL it will be executed
-    /// asnychronously on the IO thread after the manager's storage has been
-    /// initialized. Returns false (0) if cookies cannot be accessed.
-    ///
-    pub set_storage_path: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_cookie_manager_t,
-            path: *const cef_string_t,
-            persist_session_cookies: ::std::os::raw::c_int,
-            callback: *mut _cef_completion_callback_t,
-        ) -> ::std::os::raw::c_int,
-    >,
-    ///
     /// Flush the backing store (if any) to disk. If |callback| is non-NULL it will
-    /// be executed asnychronously on the IO thread after the flush is complete.
+    /// be executed asnychronously on the UI thread after the flush is complete.
     /// Returns false (0) if cookies cannot be accessed.
     ///
     pub flush_store: ::std::option::Option<
@@ -5444,45 +6053,18 @@ extern "C" {
     ///
     /// Returns the global cookie manager. By default data will be stored at
     /// CefSettings.cache_path if specified or in memory otherwise. If |callback| is
-    /// non-NULL it will be executed asnychronously on the IO thread after the
+    /// non-NULL it will be executed asnychronously on the UI thread after the
     /// manager's storage has been initialized. Using this function is equivalent to
-    /// calling cef_request_tContext::cef_request_context_get_global_context()->get_d
-    /// efault_cookie_manager().
+    /// calling cef_request_context_t::cef_request_context_get_global_context()->GetD
+    /// efaultCookieManager().
     ///
     pub fn cef_cookie_manager_get_global_manager(
         callback: *mut _cef_completion_callback_t,
     ) -> *mut cef_cookie_manager_t;
 }
-extern "C" {
-    ///
-    /// Returns a cookie manager that neither stores nor retrieves cookies. All usage
-    /// of cookies will be blocked including cookies accessed via the network
-    /// (request/response headers), via JavaScript (document.cookie), and via
-    /// cef_cookie_manager_t functions. No cookies will be displayed in DevTools. If
-    /// you wish to only block cookies sent via the network use the
-    /// cef_request_tHandler CanGetCookies and CanSetCookie functions instead.
-    ///
-    pub fn cef_cookie_manager_get_blocking_manager() -> *mut cef_cookie_manager_t;
-}
-extern "C" {
-    ///
-    /// Creates a new cookie manager. If |path| is NULL data will be stored in memory
-    /// only. Otherwise, data will be stored at the specified |path|. To persist
-    /// session cookies (cookies without an expiry date or validity interval) set
-    /// |persist_session_cookies| to true (1). Session cookies are generally intended
-    /// to be transient and most Web browsers do not persist them. If |callback| is
-    /// non-NULL it will be executed asnychronously on the IO thread after the
-    /// manager's storage has been initialized.
-    ///
-    pub fn cef_cookie_manager_create_manager(
-        path: *const cef_string_t,
-        persist_session_cookies: ::std::os::raw::c_int,
-        callback: *mut _cef_completion_callback_t,
-    ) -> *mut cef_cookie_manager_t;
-}
 ///
 /// Structure to implement for visiting cookie values. The functions of this
-/// structure will always be called on the IO thread.
+/// structure will always be called on the UI thread.
 ///
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -5543,7 +6125,7 @@ pub struct _cef_delete_cookies_callback_t {
     pub base: cef_base_ref_counted_t,
     ///
     /// Method that will be called upon completion. |num_deleted| will be the
-    /// number of cookies that were deleted or -1 if unknown.
+    /// number of cookies that were deleted.
     ///
     pub on_complete: ::std::option::Option<
         unsafe extern "C" fn(
@@ -5575,7 +6157,7 @@ pub struct _cef_extension_t {
     ///
     /// Returns the absolute path to the extension directory on disk. This value
     /// will be prefixed with PK_DIR_RESOURCES if a relative path was passed to
-    /// cef_request_tContext::LoadExtension.
+    /// cef_request_context_t::LoadExtension.
     ///
     /// The resulting string must be freed by calling cef_string_userfree_free().
     pub get_path: ::std::option::Option<
@@ -5602,7 +6184,7 @@ pub struct _cef_extension_t {
     ///
     /// Returns the handler for this extension. Will return NULL for internal
     /// extensions or if no handler was passed to
-    /// cef_request_tContext::LoadExtension.
+    /// cef_request_context_t::LoadExtension.
     ///
     pub get_handler: ::std::option::Option<
         unsafe extern "C" fn(self_: *mut _cef_extension_t) -> *mut _cef_extension_handler_t,
@@ -5610,7 +6192,7 @@ pub struct _cef_extension_t {
     ///
     /// Returns the request context that loaded this extension. Will return NULL
     /// for internal extensions or if the extension has been unloaded. See the
-    /// cef_request_tContext::LoadExtension documentation for more information
+    /// cef_request_context_t::LoadExtension documentation for more information
     /// about loader contexts. Must be called on the browser process UI thread.
     ///
     pub get_loader_context: ::std::option::Option<
@@ -5626,13 +6208,13 @@ pub struct _cef_extension_t {
     ///
     /// Unload this extension if it is not an internal extension and is currently
     /// loaded. Will result in a call to
-    /// cef_extension_tHandler::OnExtensionUnloaded on success.
+    /// cef_extension_handler_t::OnExtensionUnloaded on success.
     ///
     pub unload: ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_extension_t)>,
 }
 ///
 /// Callback structure used for asynchronous continuation of
-/// cef_extension_tHandler::GetExtensionResource.
+/// cef_extension_handler_t::GetExtensionResource.
 ///
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -5660,7 +6242,7 @@ pub struct _cef_get_extension_resource_callback_t {
 ///
 /// Implement this structure to handle events related to browser extensions. The
 /// functions of this structure will be called on the UI thread. See
-/// cef_request_tContext::LoadExtension for information about extension loading.
+/// cef_request_context_t::LoadExtension for information about extension loading.
 ///
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -5670,14 +6252,14 @@ pub struct _cef_extension_handler_t {
     ///
     pub base: cef_base_ref_counted_t,
     ///
-    /// Called if the cef_request_tContext::LoadExtension request fails. |result|
+    /// Called if the cef_request_context_t::LoadExtension request fails. |result|
     /// will be the error code.
     ///
     pub on_extension_load_failed: ::std::option::Option<
         unsafe extern "C" fn(self_: *mut _cef_extension_handler_t, result: cef_errorcode_t),
     >,
     ///
-    /// Called if the cef_request_tContext::LoadExtension request succeeds.
+    /// Called if the cef_request_context_t::LoadExtension request succeeds.
     /// |extension| is the loaded extension.
     ///
     pub on_extension_loaded: ::std::option::Option<
@@ -5753,7 +6335,7 @@ pub struct _cef_extension_handler_t {
     /// tabId parameter (e.g. chrome.tabs.*). |extension| and |browser| are the
     /// source of the API call. Return the browser that will be acted on by the API
     /// call or return NULL to act on |browser|. The returned browser must share
-    /// the same cef_request_tContext as |browser|. Incognito browsers should not
+    /// the same cef_request_context_t as |browser|. Incognito browsers should not
     /// be considered unless the source extension has incognito access enabled, in
     /// which case |include_incognito| will be true (1).
     ///
@@ -5803,289 +6385,349 @@ pub struct _cef_extension_handler_t {
     >,
 }
 ///
-/// Information about a specific web plugin.
+/// Supports discovery of and communication with media devices on the local
+/// network via the Cast and DIAL protocols. The functions of this structure may
+/// be called on any browser process thread unless otherwise indicated.
 ///
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct _cef_web_plugin_info_t {
+pub struct _cef_media_router_t {
     ///
     /// Base structure.
     ///
     pub base: cef_base_ref_counted_t,
     ///
-    /// Returns the plugin name (i.e. Flash).
+    /// Add an observer for MediaRouter events. The observer will remain registered
+    /// until the returned Registration object is destroyed.
+    ///
+    pub add_observer: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_media_router_t,
+            observer: *mut _cef_media_observer_t,
+        ) -> *mut _cef_registration_t,
+    >,
+    ///
+    /// Returns a MediaSource object for the specified media source URN. Supported
+    /// URN schemes include "cast:" and "dial:", and will be already known by the
+    /// client application (e.g. "cast:<appId>?clientId=<clientId>").
+    ///
+    pub get_source: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_media_router_t,
+            urn: *const cef_string_t,
+        ) -> *mut _cef_media_source_t,
+    >,
+    ///
+    /// Trigger an asynchronous call to cef_media_observer_t::OnSinks on all
+    /// registered observers.
+    ///
+    pub notify_current_sinks:
+        ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_media_router_t)>,
+    ///
+    /// Create a new route between |source| and |sink|. Source and sink must be
+    /// valid, compatible (as reported by cef_media_sink_t::IsCompatibleWith), and
+    /// a route between them must not already exist. |callback| will be executed on
+    /// success or failure. If route creation succeeds it will also trigger an
+    /// asynchronous call to cef_media_observer_t::OnRoutes on all registered
+    /// observers.
+    ///
+    pub create_route: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_media_router_t,
+            source: *mut _cef_media_source_t,
+            sink: *mut _cef_media_sink_t,
+            callback: *mut _cef_media_route_create_callback_t,
+        ),
+    >,
+    ///
+    /// Trigger an asynchronous call to cef_media_observer_t::OnRoutes on all
+    /// registered observers.
+    ///
+    pub notify_current_routes:
+        ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_media_router_t)>,
+}
+///
+/// Supports discovery of and communication with media devices on the local
+/// network via the Cast and DIAL protocols. The functions of this structure may
+/// be called on any browser process thread unless otherwise indicated.
+///
+pub type cef_media_router_t = _cef_media_router_t;
+extern "C" {
+    ///
+    /// Returns the MediaRouter object associated with the global request context. If
+    /// |callback| is non-NULL it will be executed asnychronously on the UI thread
+    /// after the manager's storage has been initialized. Equivalent to calling cef_r
+    /// equest_context_t::cef_request_context_get_global_context()->get_media_router(
+    /// ).
+    ///
+    pub fn cef_media_router_get_global(
+        callback: *mut _cef_completion_callback_t,
+    ) -> *mut cef_media_router_t;
+}
+///
+/// Implemented by the client to observe MediaRouter events and registered via
+/// cef_media_router_t::AddObserver. The functions of this structure will be
+/// called on the browser process UI thread.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_media_observer_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// The list of available media sinks has changed or
+    /// cef_media_router_t::NotifyCurrentSinks was called.
+    ///
+    pub on_sinks: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_media_observer_t,
+            sinksCount: usize,
+            sinks: *const *mut _cef_media_sink_t,
+        ),
+    >,
+    ///
+    /// The list of available media routes has changed or
+    /// cef_media_router_t::NotifyCurrentRoutes was called.
+    ///
+    pub on_routes: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_media_observer_t,
+            routesCount: usize,
+            routes: *const *mut _cef_media_route_t,
+        ),
+    >,
+    ///
+    /// The connection state of |route| has changed.
+    ///
+    pub on_route_state_changed: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_media_observer_t,
+            route: *mut _cef_media_route_t,
+            state: cef_media_route_connection_state_t,
+        ),
+    >,
+    ///
+    /// A message was recieved over |route|. |message| is only valid for the scope
+    /// of this callback and should be copied if necessary.
+    ///
+    pub on_route_message_received: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_media_observer_t,
+            route: *mut _cef_media_route_t,
+            message: *const ::std::os::raw::c_void,
+            message_size: usize,
+        ),
+    >,
+}
+///
+/// Represents the route between a media source and sink. Instances of this
+/// object are created via cef_media_router_t::CreateRoute and retrieved via
+/// cef_media_observer_t::OnRoutes. Contains the status and metadata of a routing
+/// operation. The functions of this structure may be called on any browser
+/// process thread unless otherwise indicated.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_media_route_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Returns the ID for this route.
+    ///
+    /// The resulting string must be freed by calling cef_string_userfree_free().
+    pub get_id: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_media_route_t) -> cef_string_userfree_t,
+    >,
+    ///
+    /// Returns the source associated with this route.
+    ///
+    pub get_source: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_media_route_t) -> *mut _cef_media_source_t,
+    >,
+    ///
+    /// Returns the sink associated with this route.
+    ///
+    pub get_sink: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_media_route_t) -> *mut _cef_media_sink_t,
+    >,
+    ///
+    /// Send a message over this route. |message| will be copied if necessary.
+    ///
+    pub send_route_message: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_media_route_t,
+            message: *const ::std::os::raw::c_void,
+            message_size: usize,
+        ),
+    >,
+    ///
+    /// Terminate this route. Will result in an asynchronous call to
+    /// cef_media_observer_t::OnRoutes on all registered observers.
+    ///
+    pub terminate: ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_media_route_t)>,
+}
+///
+/// Callback structure for cef_media_router_t::CreateRoute. The functions of this
+/// structure will be called on the browser process UI thread.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_media_route_create_callback_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Method that will be executed when the route creation has finished. |result|
+    /// will be CEF_MRCR_OK if the route creation succeeded. |error| will be a
+    /// description of the error if the route creation failed. |route| is the
+    /// resulting route, or NULL if the route creation failed.
+    ///
+    pub on_media_route_create_finished: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_media_route_create_callback_t,
+            result: cef_media_route_create_result_t,
+            error: *const cef_string_t,
+            route: *mut _cef_media_route_t,
+        ),
+    >,
+}
+///
+/// Represents a sink to which media can be routed. Instances of this object are
+/// retrieved via cef_media_observer_t::OnSinks. The functions of this structure
+/// may be called on any browser process thread unless otherwise indicated.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_media_sink_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Returns the ID for this sink.
+    ///
+    /// The resulting string must be freed by calling cef_string_userfree_free().
+    pub get_id: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_media_sink_t) -> cef_string_userfree_t,
+    >,
+    ///
+    /// Returns the name of this sink.
     ///
     /// The resulting string must be freed by calling cef_string_userfree_free().
     pub get_name: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_web_plugin_info_t) -> cef_string_userfree_t,
+        unsafe extern "C" fn(self_: *mut _cef_media_sink_t) -> cef_string_userfree_t,
     >,
     ///
-    /// Returns the plugin file path (DLL/bundle/library).
-    ///
-    /// The resulting string must be freed by calling cef_string_userfree_free().
-    pub get_path: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_web_plugin_info_t) -> cef_string_userfree_t,
-    >,
-    ///
-    /// Returns the version of the plugin (may be OS-specific).
-    ///
-    /// The resulting string must be freed by calling cef_string_userfree_free().
-    pub get_version: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_web_plugin_info_t) -> cef_string_userfree_t,
-    >,
-    ///
-    /// Returns a description of the plugin from the version information.
+    /// Returns the description of this sink.
     ///
     /// The resulting string must be freed by calling cef_string_userfree_free().
     pub get_description: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_web_plugin_info_t) -> cef_string_userfree_t,
+        unsafe extern "C" fn(self_: *mut _cef_media_sink_t) -> cef_string_userfree_t,
     >,
-}
-///
-/// Structure to implement for visiting web plugin information. The functions of
-/// this structure will be called on the browser process UI thread.
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_web_plugin_info_visitor_t {
     ///
-    /// Base structure.
+    /// Returns the icon type for this sink.
     ///
-    pub base: cef_base_ref_counted_t,
+    pub get_icon_type: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_media_sink_t) -> cef_media_sink_icon_type_t,
+    >,
     ///
-    /// Method that will be called once for each plugin. |count| is the 0-based
-    /// index for the current plugin. |total| is the total number of plugins.
-    /// Return false (0) to stop visiting plugins. This function may never be
-    /// called if no plugins are found.
+    /// Asynchronously retrieves device info.
     ///
-    pub visit: ::std::option::Option<
+    pub get_device_info: ::std::option::Option<
         unsafe extern "C" fn(
-            self_: *mut _cef_web_plugin_info_visitor_t,
-            info: *mut _cef_web_plugin_info_t,
-            count: ::std::os::raw::c_int,
-            total: ::std::os::raw::c_int,
+            self_: *mut _cef_media_sink_t,
+            callback: *mut _cef_media_sink_device_info_callback_t,
+        ),
+    >,
+    ///
+    /// Returns true (1) if this sink accepts content via Cast.
+    ///
+    pub is_cast_sink: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_media_sink_t) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Returns true (1) if this sink accepts content via DIAL.
+    ///
+    pub is_dial_sink: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_media_sink_t) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Returns true (1) if this sink is compatible with |source|.
+    ///
+    pub is_compatible_with: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_media_sink_t,
+            source: *mut _cef_media_source_t,
         ) -> ::std::os::raw::c_int,
     >,
 }
 ///
-/// Structure to implement for visiting web plugin information. The functions of
-/// this structure will be called on the browser process UI thread.
-///
-pub type cef_web_plugin_info_visitor_t = _cef_web_plugin_info_visitor_t;
-///
-/// Structure to implement for receiving unstable plugin information. The
-/// functions of this structure will be called on the browser process IO thread.
+/// Callback structure for cef_media_sink_t::GetDeviceInfo. The functions of this
+/// structure will be called on the browser process UI thread.
 ///
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct _cef_web_plugin_unstable_callback_t {
+pub struct _cef_media_sink_device_info_callback_t {
     ///
     /// Base structure.
     ///
     pub base: cef_base_ref_counted_t,
     ///
-    /// Method that will be called for the requested plugin. |unstable| will be
-    /// true (1) if the plugin has reached the crash count threshold of 3 times in
-    /// 120 seconds.
+    /// Method that will be executed asyncronously once device information has been
+    /// retrieved.
     ///
-    pub is_unstable: ::std::option::Option<
+    pub on_media_sink_device_info: ::std::option::Option<
         unsafe extern "C" fn(
-            self_: *mut _cef_web_plugin_unstable_callback_t,
-            path: *const cef_string_t,
-            unstable: ::std::os::raw::c_int,
+            self_: *mut _cef_media_sink_device_info_callback_t,
+            device_info: *const _cef_media_sink_device_info_t,
         ),
     >,
 }
 ///
-/// Structure to implement for receiving unstable plugin information. The
-/// functions of this structure will be called on the browser process IO thread.
-///
-pub type cef_web_plugin_unstable_callback_t = _cef_web_plugin_unstable_callback_t;
-///
-/// Implement this structure to receive notification when CDM registration is
-/// complete. The functions of this structure will be called on the browser
-/// process UI thread.
+/// Represents a source from which media can be routed. Instances of this object
+/// are retrieved via cef_media_router_t::GetSource. The functions of this
+/// structure may be called on any browser process thread unless otherwise
+/// indicated.
 ///
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct _cef_register_cdm_callback_t {
+pub struct _cef_media_source_t {
     ///
     /// Base structure.
     ///
     pub base: cef_base_ref_counted_t,
     ///
-    /// Method that will be called when CDM registration is complete. |result| will
-    /// be CEF_CDM_REGISTRATION_ERROR_NONE if registration completed successfully.
-    /// Otherwise, |result| and |error_message| will contain additional information
-    /// about why registration failed.
+    /// Returns the ID (media source URN or URL) for this source.
     ///
-    pub on_cdm_registration_complete: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_register_cdm_callback_t,
-            result: cef_cdm_registration_error_t,
-            error_message: *const cef_string_t,
-        ),
+    /// The resulting string must be freed by calling cef_string_userfree_free().
+    pub get_id: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_media_source_t) -> cef_string_userfree_t,
+    >,
+    ///
+    /// Returns true (1) if this source outputs its content via Cast.
+    ///
+    pub is_cast_source: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_media_source_t) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Returns true (1) if this source outputs its content via DIAL.
+    ///
+    pub is_dial_source: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_media_source_t) -> ::std::os::raw::c_int,
     >,
 }
-///
-/// Implement this structure to receive notification when CDM registration is
-/// complete. The functions of this structure will be called on the browser
-/// process UI thread.
-///
-pub type cef_register_cdm_callback_t = _cef_register_cdm_callback_t;
-extern "C" {
-    ///
-    /// Visit web plugin information. Can be called on any thread in the browser
-    /// process.
-    ///
-    pub fn cef_visit_web_plugin_info(visitor: *mut cef_web_plugin_info_visitor_t);
-}
-extern "C" {
-    ///
-    /// Cause the plugin list to refresh the next time it is accessed regardless of
-    /// whether it has already been loaded. Can be called on any thread in the
-    /// browser process.
-    ///
-    pub fn cef_refresh_web_plugins();
-}
-extern "C" {
-    ///
-    /// Unregister an internal plugin. This may be undone the next time
-    /// cef_refresh_web_plugins() is called. Can be called on any thread in the
-    /// browser process.
-    ///
-    pub fn cef_unregister_internal_web_plugin(path: *const cef_string_t);
-}
-extern "C" {
-    ///
-    /// Register a plugin crash. Can be called on any thread in the browser process
-    /// but will be executed on the IO thread.
-    ///
-    pub fn cef_register_web_plugin_crash(path: *const cef_string_t);
-}
-extern "C" {
-    ///
-    /// Query if a plugin is unstable. Can be called on any thread in the browser
-    /// process.
-    ///
-    pub fn cef_is_web_plugin_unstable(
-        path: *const cef_string_t,
-        callback: *mut cef_web_plugin_unstable_callback_t,
-    );
-}
-extern "C" {
-    ///
-    /// Register the Widevine CDM plugin.
-    ///
-    /// The client application is responsible for downloading an appropriate
-    /// platform-specific CDM binary distribution from Google, extracting the
-    /// contents, and building the required directory structure on the local machine.
-    /// The cef_browser_host_t::StartDownload function and CefZipArchive structure
-    /// can be used to implement this functionality in CEF. Contact Google via
-    /// https://www.widevine.com/contact.html for details on CDM download.
-    ///
-    /// |path| is a directory that must contain the following files:
-    ///   1. manifest.json file from the CDM binary distribution (see below).
-    ///   2. widevinecdm file from the CDM binary distribution (e.g.
-    ///      widevinecdm.dll on on Windows, libwidevinecdm.dylib on OS X,
-    ///      libwidevinecdm.so on Linux).
-    ///
-    /// If any of these files are missing or if the manifest file has incorrect
-    /// contents the registration will fail and |callback| will receive a |result|
-    /// value of CEF_CDM_REGISTRATION_ERROR_INCORRECT_CONTENTS.
-    ///
-    /// The manifest.json file must contain the following keys:
-    ///   A. "os": Supported OS (e.g. "mac", "win" or "linux").
-    ///   B. "arch": Supported architecture (e.g. "ia32" or "x64").
-    ///   C. "x-cdm-module-versions": Module API version (e.g. "4").
-    ///   D. "x-cdm-interface-versions": Interface API version (e.g. "8").
-    ///   E. "x-cdm-host-versions": Host API version (e.g. "8").
-    ///   F. "version": CDM version (e.g. "1.4.8.903").
-    ///   G. "x-cdm-codecs": List of supported codecs (e.g. "vp8,vp9.0,avc1").
-    ///
-    /// A through E are used to verify compatibility with the current Chromium
-    /// version. If the CDM is not compatible the registration will fail and
-    /// |callback| will receive a |result| value of
-    /// CEF_CDM_REGISTRATION_ERROR_INCOMPATIBLE.
-    ///
-    /// |callback| will be executed asynchronously once registration is complete.
-    ///
-    /// On Linux this function must be called before cef_initialize() and the
-    /// registration cannot be changed during runtime. If registration is not
-    /// supported at the time that cef_register_widevine_cdm() is called then
-    /// |callback| will receive a |result| value of
-    /// CEF_CDM_REGISTRATION_ERROR_NOT_SUPPORTED.
-    ///
-    pub fn cef_register_widevine_cdm(
-        path: *const cef_string_t,
-        callback: *mut cef_register_cdm_callback_t,
-    );
-}
-///
-/// Implement this structure to provide handler implementations. The handler
-/// instance will not be released until all objects related to the context have
-/// been destroyed.
-///
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _cef_request_context_handler_t {
-    ///
-    /// Base structure.
-    ///
-    pub base: cef_base_ref_counted_t,
-    ///
-    /// Called on the browser process UI thread immediately after the request
-    /// context has been initialized.
-    ///
-    pub on_request_context_initialized: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_request_context_handler_t,
-            request_context: *mut _cef_request_context_t,
-        ),
-    >,
-    ///
-    /// Called on the browser process IO thread to retrieve the cookie manager. If
-    /// this function returns NULL the default cookie manager retrievable via
-    /// cef_request_tContext::get_default_cookie_manager() will be used.
-    ///
-    pub get_cookie_manager: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_request_context_handler_t,
-        ) -> *mut _cef_cookie_manager_t,
-    >,
-    ///
-    /// Called on multiple browser process threads before a plugin instance is
-    /// loaded. |mime_type| is the mime type of the plugin that will be loaded.
-    /// |plugin_url| is the content URL that the plugin will load and may be NULL.
-    /// |is_main_frame| will be true (1) if the plugin is being loaded in the main
-    /// (top-level) frame, |top_origin_url| is the URL for the top-level frame that
-    /// contains the plugin when loading a specific plugin instance or NULL when
-    /// building the initial list of enabled plugins for 'navigator.plugins'
-    /// JavaScript state. |plugin_info| includes additional information about the
-    /// plugin that will be loaded. |plugin_policy| is the recommended policy.
-    /// Modify |plugin_policy| and return true (1) to change the policy. Return
-    /// false (0) to use the recommended policy. The default plugin policy can be
-    /// set at runtime using the `--plugin-policy=[allow|detect|block]` command-
-    /// line flag. Decisions to mark a plugin as disabled by setting
-    /// |plugin_policy| to PLUGIN_POLICY_DISABLED may be cached when
-    /// |top_origin_url| is NULL. To purge the plugin list cache and potentially
-    /// trigger new calls to this function call
-    /// cef_request_tContext::PurgePluginListCache.
-    ///
-    pub on_before_plugin_load: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_request_context_handler_t,
-            mime_type: *const cef_string_t,
-            plugin_url: *const cef_string_t,
-            is_main_frame: ::std::os::raw::c_int,
-            top_origin_url: *const cef_string_t,
-            plugin_info: *mut _cef_web_plugin_info_t,
-            plugin_policy: *mut cef_plugin_policy_t,
-        ) -> ::std::os::raw::c_int,
-    >,
+    _unused: [u8; 0],
 }
 ///
-/// Callback structure for cef_request_tContext::ResolveHost.
+/// Callback structure for cef_request_context_t::ResolveHost.
 ///
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -6175,14 +6817,11 @@ pub struct _cef_request_context_t {
         unsafe extern "C" fn(self_: *mut _cef_request_context_t) -> cef_string_userfree_t,
     >,
     ///
-    /// Returns the default cookie manager for this object. This will be the global
-    /// cookie manager if this object is the global request context. Otherwise,
-    /// this will be the default cookie manager used when this request context does
-    /// not receive a value via cef_request_tContextHandler::get_cookie_manager().
-    /// If |callback| is non-NULL it will be executed asnychronously on the IO
-    /// thread after the manager's storage has been initialized.
+    /// Returns the cookie manager for this object. If |callback| is non-NULL it
+    /// will be executed asnychronously on the UI thread after the manager's
+    /// storage has been initialized.
     ///
-    pub get_default_cookie_manager: ::std::option::Option<
+    pub get_cookie_manager: ::std::option::Option<
         unsafe extern "C" fn(
             self_: *mut _cef_request_context_t,
             callback: *mut _cef_completion_callback_t,
@@ -6215,19 +6854,6 @@ pub struct _cef_request_context_t {
     ///
     pub clear_scheme_handler_factories: ::std::option::Option<
         unsafe extern "C" fn(self_: *mut _cef_request_context_t) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Tells all renderer processes associated with this context to throw away
-    /// their plugin list cache. If |reload_pages| is true (1) they will also
-    /// reload all pages with plugins.
-    /// cef_request_tContextHandler::OnBeforePluginLoad may be called to rebuild
-    /// the plugin list cache.
-    ///
-    pub purge_plugin_list_cache: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_request_context_t,
-            reload_pages: ::std::os::raw::c_int,
-        ),
     >,
     ///
     /// Returns true (1) if a preference with the specified |name| exists. This
@@ -6295,7 +6921,7 @@ pub struct _cef_request_context_t {
     >,
     ///
     /// Clears all certificate exceptions that were added as part of handling
-    /// cef_request_tHandler::on_certificate_error(). If you call this it is
+    /// cef_request_handler_t::on_certificate_error(). If you call this it is
     /// recommended that you also call close_all_connections() or you risk not
     /// being prompted again for server certificates if you reconnect quickly. If
     /// |callback| is non-NULL it will be executed on the UI thread after
@@ -6308,9 +6934,20 @@ pub struct _cef_request_context_t {
         ),
     >,
     ///
+    /// Clears all HTTP authentication credentials that were added as part of
+    /// handling GetAuthCredentials. If |callback| is non-NULL it will be executed
+    /// on the UI thread after completion.
+    ///
+    pub clear_http_auth_credentials: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_request_context_t,
+            callback: *mut _cef_completion_callback_t,
+        ),
+    >,
+    ///
     /// Clears all active and idle connections that Chromium currently has. This is
     /// only recommended if you have released all other CEF objects but don't yet
-    /// want to call Cefshutdown(). If |callback| is non-NULL it will be executed
+    /// want to call cef_shutdown(). If |callback| is non-NULL it will be executed
     /// on the UI thread after completion.
     ///
     pub close_all_connections: ::std::option::Option<
@@ -6331,26 +6968,13 @@ pub struct _cef_request_context_t {
         ),
     >,
     ///
-    /// Attempts to resolve |origin| to a list of associated IP addresses using
-    /// cached data. |resolved_ips| will be populated with the list of resolved IP
-    /// addresses or NULL if no cached data is available. Returns ERR_NONE on
-    /// success. This function must be called on the browser process IO thread.
-    ///
-    pub resolve_host_cached: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_request_context_t,
-            origin: *const cef_string_t,
-            resolved_ips: cef_string_list_t,
-        ) -> cef_errorcode_t,
-    >,
-    ///
     /// Load an extension.
     ///
     /// If extension resources will be read from disk using the default load
     /// implementation then |root_directory| should be the absolute path to the
     /// extension resources directory and |manifest| should be NULL. If extension
-    /// resources will be provided by the client (e.g. via cef_request_tHandler
-    /// and/or cef_extension_tHandler) then |root_directory| should be a path
+    /// resources will be provided by the client (e.g. via cef_request_handler_t
+    /// and/or cef_extension_handler_t) then |root_directory| should be a path
     /// component unique to the extension (if not absolute this will be internally
     /// prefixed with the PK_DIR_RESOURCES path) and |manifest| should contain the
     /// contents that would otherwise be read from the "manifest.json" file on
@@ -6359,17 +6983,17 @@ pub struct _cef_request_context_t {
     /// The loaded extension will be accessible in all contexts sharing the same
     /// storage (HasExtension returns true (1)). However, only the context on which
     /// this function was called is considered the loader (DidLoadExtension returns
-    /// true (1)) and only the loader will receive cef_request_tContextHandler
+    /// true (1)) and only the loader will receive cef_request_context_handler_t
     /// callbacks for the extension.
     ///
-    /// cef_extension_tHandler::OnExtensionLoaded will be called on load success or
-    /// cef_extension_tHandler::OnExtensionLoadFailed will be called on load
+    /// cef_extension_handler_t::OnExtensionLoaded will be called on load success
+    /// or cef_extension_handler_t::OnExtensionLoadFailed will be called on load
     /// failure.
     ///
     /// If the extension specifies a background script via the "background"
-    /// manifest key then cef_extension_tHandler::OnBeforeBackgroundBrowser will be
-    /// called to create the background browser. See that function for additional
-    /// information about background scripts.
+    /// manifest key then cef_extension_handler_t::OnBeforeBackgroundBrowser will
+    /// be called to create the background browser. See that function for
+    /// additional information about background scripts.
     ///
     /// For visible extension views the client application should evaluate the
     /// manifest to determine the correct extension URL to load and then pass that
@@ -6446,6 +7070,17 @@ pub struct _cef_request_context_t {
             extension_id: *const cef_string_t,
         ) -> *mut _cef_extension_t,
     >,
+    ///
+    /// Returns the MediaRouter object associated with this context.  If |callback|
+    /// is non-NULL it will be executed asnychronously on the UI thread after the
+    /// manager's context has been initialized.
+    ///
+    pub get_media_router: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_request_context_t,
+            callback: *mut _cef_completion_callback_t,
+        ) -> *mut _cef_media_router_t,
+    >,
 }
 ///
 /// A request context provides request handling for a set of related browser or
@@ -6491,10 +7126,10 @@ extern "C" {
     ) -> *mut cef_request_context_t;
 }
 ///
-/// Structure used to represent a browser window. When used in the browser
-/// process the functions of this structure may be called on any thread unless
-/// otherwise indicated in the comments. When used in the render process the
-/// functions of this structure may only be called on the main thread.
+/// Structure used to represent a browser. When used in the browser process the
+/// functions of this structure may be called on any thread unless otherwise
+/// indicated in the comments. When used in the render process the functions of
+/// this structure may only be called on the main thread.
 ///
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -6503,6 +7138,13 @@ pub struct _cef_browser_t {
     /// Base structure.
     ///
     pub base: cef_base_ref_counted_t,
+    ///
+    /// True if this object is currently valid. This will return false (0) after
+    /// cef_life_span_handler_t::OnBeforeClose is called.
+    ///
+    pub is_valid: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_browser_t) -> ::std::os::raw::c_int,
+    >,
     ///
     /// Returns the browser host object. This function can only be called in the
     /// browser process.
@@ -6567,7 +7209,7 @@ pub struct _cef_browser_t {
         ) -> ::std::os::raw::c_int,
     >,
     ///
-    /// Returns true (1) if the window is a popup window.
+    /// Returns true (1) if the browser is a popup.
     ///
     pub is_popup: ::std::option::Option<
         unsafe extern "C" fn(self_: *mut _cef_browser_t) -> ::std::os::raw::c_int,
@@ -6579,13 +7221,19 @@ pub struct _cef_browser_t {
         unsafe extern "C" fn(self_: *mut _cef_browser_t) -> ::std::os::raw::c_int,
     >,
     ///
-    /// Returns the main (top-level) frame for the browser window.
+    /// Returns the main (top-level) frame for the browser. In the browser process
+    /// this will return a valid object until after
+    /// cef_life_span_handler_t::OnBeforeClose is called. In the renderer process
+    /// this will return NULL if the main frame is hosted in a different renderer
+    /// process (e.g. for cross-origin sub-frames). The main frame object will
+    /// change during cross-origin navigation or re-navigation after renderer
+    /// process termination (due to crashes, etc).
     ///
     pub get_main_frame: ::std::option::Option<
         unsafe extern "C" fn(self_: *mut _cef_browser_t) -> *mut _cef_frame_t,
     >,
     ///
-    /// Returns the focused frame for the browser window.
+    /// Returns the focused frame for the browser.
     ///
     pub get_focused_frame: ::std::option::Option<
         unsafe extern "C" fn(self_: *mut _cef_browser_t) -> *mut _cef_frame_t,
@@ -6626,23 +7274,12 @@ pub struct _cef_browser_t {
     pub get_frame_names: ::std::option::Option<
         unsafe extern "C" fn(self_: *mut _cef_browser_t, names: cef_string_list_t),
     >,
-    ///
-    /// Send a message to the specified |target_process|. Returns true (1) if the
-    /// message was sent successfully.
-    ///
-    pub send_process_message: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_browser_t,
-            target_process: cef_process_id_t,
-            message: *mut _cef_process_message_t,
-        ) -> ::std::os::raw::c_int,
-    >,
 }
 ///
-/// Structure used to represent a browser window. When used in the browser
-/// process the functions of this structure may be called on any thread unless
-/// otherwise indicated in the comments. When used in the render process the
-/// functions of this structure may only be called on the main thread.
+/// Structure used to represent a browser. When used in the browser process the
+/// functions of this structure may be called on any thread unless otherwise
+/// indicated in the comments. When used in the render process the functions of
+/// this structure may only be called on the main thread.
 ///
 pub type cef_browser_t = _cef_browser_t;
 ///
@@ -6750,10 +7387,10 @@ pub struct _cef_download_image_callback_t {
     >,
 }
 ///
-/// Structure used to represent the browser process aspects of a browser window.
-/// The functions of this structure can only be called in the browser process.
-/// They may be called on any thread in that process unless otherwise indicated
-/// in the comments.
+/// Structure used to represent the browser process aspects of a browser. The
+/// functions of this structure can only be called in the browser process. They
+/// may be called on any thread in that process unless otherwise indicated in the
+/// comments.
 ///
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -6783,11 +7420,12 @@ pub struct _cef_browser_host_t {
     >,
     ///
     /// Helper for closing a browser. Call this function from the top-level window
-    /// close handler. Internally this calls CloseBrowser(false (0)) if the close
-    /// has not yet been initiated. This function returns false (0) while the close
-    /// is pending and true (1) after the close has completed. See close_browser()
-    /// and cef_life_span_handler_t::do_close() documentation for additional usage
-    /// information. This function must be called on the browser process UI thread.
+    /// close handler (if any). Internally this calls CloseBrowser(false (0)) if
+    /// the close has not yet been initiated. This function returns false (0) while
+    /// the close is pending and true (1) after the close has completed. See
+    /// close_browser() and cef_life_span_handler_t::do_close() documentation for
+    /// additional usage information. This function must be called on the browser
+    /// process UI thread.
     ///
     pub try_close_browser: ::std::option::Option<
         unsafe extern "C" fn(self_: *mut _cef_browser_host_t) -> ::std::os::raw::c_int,
@@ -6799,18 +7437,19 @@ pub struct _cef_browser_host_t {
         unsafe extern "C" fn(self_: *mut _cef_browser_host_t, focus: ::std::os::raw::c_int),
     >,
     ///
-    /// Retrieve the window handle for this browser. If this browser is wrapped in
-    /// a cef_browser_view_t this function should be called on the browser process
-    /// UI thread and it will return the handle for the top-level native window.
+    /// Retrieve the window handle (if any) for this browser. If this browser is
+    /// wrapped in a cef_browser_view_t this function should be called on the
+    /// browser process UI thread and it will return the handle for the top-level
+    /// native window.
     ///
     pub get_window_handle: ::std::option::Option<
         unsafe extern "C" fn(self_: *mut _cef_browser_host_t) -> *mut ::std::os::raw::c_void,
     >,
     ///
-    /// Retrieve the window handle of the browser that opened this browser. Will
-    /// return NULL for non-popup windows or if this browser is wrapped in a
-    /// cef_browser_view_t. This function can be used in combination with custom
-    /// handling of modal windows.
+    /// Retrieve the window handle (if any) of the browser that opened this
+    /// browser. Will return NULL for non-popup browsers or if this browser is
+    /// wrapped in a cef_browser_view_t. This function can be used in combination
+    /// with custom handling of modal windows.
     ///
     pub get_opener_window_handle: ::std::option::Option<
         unsafe extern "C" fn(self_: *mut _cef_browser_host_t) -> *mut ::std::os::raw::c_void,
@@ -6921,20 +7560,17 @@ pub struct _cef_browser_host_t {
         ),
     >,
     ///
-    /// Search for |searchText|. |identifier| must be a unique ID and these IDs
-    /// must strictly increase so that newer requests always have greater IDs than
-    /// older requests. If |identifier| is zero or less than the previous ID value
-    /// then it will be automatically assigned a new valid ID. |forward| indicates
-    /// whether to search forward or backward within the page. |matchCase|
-    /// indicates whether the search should be case-sensitive. |findNext| indicates
-    /// whether this is the first request or a follow-up. The cef_find_handler_t
-    /// instance, if any, returned via cef_client_t::GetFindHandler will be called
-    /// to report find results.
+    /// Search for |searchText|. |forward| indicates whether to search forward or
+    /// backward within the page. |matchCase| indicates whether the search should
+    /// be case-sensitive. |findNext| indicates whether this is the first request
+    /// or a follow-up. The search will be restarted if |searchText| or |matchCase|
+    /// change. The search will be stopped if |searchText| is NULL. The
+    /// cef_find_handler_t instance, if any, returned via
+    /// cef_client_t::GetFindHandler will be called to report find results.
     ///
     pub find: ::std::option::Option<
         unsafe extern "C" fn(
             self_: *mut _cef_browser_host_t,
-            identifier: ::std::os::raw::c_int,
             searchText: *const cef_string_t,
             forward: ::std::os::raw::c_int,
             matchCase: ::std::os::raw::c_int,
@@ -6981,6 +7617,78 @@ pub struct _cef_browser_host_t {
         unsafe extern "C" fn(self_: *mut _cef_browser_host_t) -> ::std::os::raw::c_int,
     >,
     ///
+    /// Send a function call message over the DevTools protocol. |message| must be
+    /// a UTF8-encoded JSON dictionary that contains "id" (int), "function"
+    /// (string) and "params" (dictionary, optional) values. See the DevTools
+    /// protocol documentation at https://chromedevtools.github.io/devtools-
+    /// protocol/ for details of supported functions and the expected "params"
+    /// dictionary contents. |message| will be copied if necessary. This function
+    /// will return true (1) if called on the UI thread and the message was
+    /// successfully submitted for validation, otherwise false (0). Validation will
+    /// be applied asynchronously and any messages that fail due to formatting
+    /// errors or missing parameters may be discarded without notification. Prefer
+    /// ExecuteDevToolsMethod if a more structured approach to message formatting
+    /// is desired.
+    ///
+    /// Every valid function call will result in an asynchronous function result or
+    /// error message that references the sent message "id". Event messages are
+    /// received while notifications are enabled (for example, between function
+    /// calls for "Page.enable" and "Page.disable"). All received messages will be
+    /// delivered to the observer(s) registered with AddDevToolsMessageObserver.
+    /// See cef_dev_tools_message_observer_t::OnDevToolsMessage documentation for
+    /// details of received message contents.
+    ///
+    /// Usage of the SendDevToolsMessage, ExecuteDevToolsMethod and
+    /// AddDevToolsMessageObserver functions does not require an active DevTools
+    /// front-end or remote-debugging session. Other active DevTools sessions will
+    /// continue to function independently. However, any modification of global
+    /// browser state by one session may not be reflected in the UI of other
+    /// sessions.
+    ///
+    /// Communication with the DevTools front-end (when displayed) can be logged
+    /// for development purposes by passing the `--devtools-protocol-log-
+    /// file=<path>` command-line flag.
+    ///
+    pub send_dev_tools_message: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_browser_host_t,
+            message: *const ::std::os::raw::c_void,
+            message_size: usize,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Execute a function call over the DevTools protocol. This is a more
+    /// structured version of SendDevToolsMessage. |message_id| is an incremental
+    /// number that uniquely identifies the message (pass 0 to have the next number
+    /// assigned automatically based on previous values). |function| is the
+    /// function name. |params| are the function parameters, which may be NULL. See
+    /// the DevTools protocol documentation (linked above) for details of supported
+    /// functions and the expected |params| dictionary contents. This function will
+    /// return the assigned message ID if called on the UI thread and the message
+    /// was successfully submitted for validation, otherwise 0. See the
+    /// SendDevToolsMessage documentation for additional usage information.
+    ///
+    pub execute_dev_tools_method: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_browser_host_t,
+            message_id: ::std::os::raw::c_int,
+            method: *const cef_string_t,
+            params: *mut _cef_dictionary_value_t,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Add an observer for DevTools protocol messages (function results and
+    /// events). The observer will remain registered until the returned
+    /// Registration object is destroyed. See the SendDevToolsMessage documentation
+    /// for additional usage information.
+    ///
+    pub add_dev_tools_message_observer: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_browser_host_t,
+            observer: *mut _cef_dev_tools_message_observer_t,
+        ) -> *mut _cef_registration_t,
+    >,
+    ///
     /// Retrieve a snapshot of current navigation entries as values sent to the
     /// specified visitor. If |current_only| is true (1) only the current
     /// navigation entry will be sent, otherwise all navigation entries will be
@@ -6992,18 +7700,6 @@ pub struct _cef_browser_host_t {
             visitor: *mut _cef_navigation_entry_visitor_t,
             current_only: ::std::os::raw::c_int,
         ),
-    >,
-    ///
-    /// Set whether mouse cursor change is disabled.
-    ///
-    pub set_mouse_cursor_change_disabled: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_browser_host_t, disabled: ::std::os::raw::c_int),
-    >,
-    ///
-    /// Returns true (1) if mouse cursor change is disabled.
-    ///
-    pub is_mouse_cursor_change_disabled: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_browser_host_t) -> ::std::os::raw::c_int,
     >,
     ///
     /// If a misspelled word is currently selected in an editable node calling this
@@ -7058,6 +7754,12 @@ pub struct _cef_browser_host_t {
         unsafe extern "C" fn(self_: *mut _cef_browser_host_t, type_: cef_paint_element_type_t),
     >,
     ///
+    /// Issue a BeginFrame request to Chromium.  Only valid when
+    /// cef_window_tInfo::external_begin_frame_enabled is set to true (1).
+    ///
+    pub send_external_begin_frame:
+        ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_browser_host_t)>,
+    ///
     /// Send a key event to the browser.
     ///
     pub send_key_event: ::std::option::Option<
@@ -7103,10 +7805,10 @@ pub struct _cef_browser_host_t {
         ),
     >,
     ///
-    /// Send a focus event to the browser.
+    /// Send a touch event to the browser for a windowless browser.
     ///
-    pub send_focus_event: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_browser_host_t, setFocus: ::std::os::raw::c_int),
+    pub send_touch_event: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_browser_host_t, event: *const _cef_touch_event_t),
     >,
     ///
     /// Send a capture lost event to the browser.
@@ -7332,7 +8034,7 @@ pub struct _cef_browser_host_t {
     >,
     ///
     /// Returns the extension hosted in this browser or NULL if no extension is
-    /// hosted. See cef_request_tContext::LoadExtension for details.
+    /// hosted. See cef_request_context_t::LoadExtension for details.
     ///
     pub get_extension: ::std::option::Option<
         unsafe extern "C" fn(self_: *mut _cef_browser_host_t) -> *mut _cef_extension_t,
@@ -7340,39 +8042,60 @@ pub struct _cef_browser_host_t {
     ///
     /// Returns true (1) if this browser is hosting an extension background script.
     /// Background hosts do not have a window and are not displayable. See
-    /// cef_request_tContext::LoadExtension for details.
+    /// cef_request_context_t::LoadExtension for details.
     ///
     pub is_background_host: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_browser_host_t) -> ::std::os::raw::c_int,
+    >,
+    ///
+    ///  Set whether the browser's audio is muted.
+    ///
+    pub set_audio_muted: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_browser_host_t, mute: ::std::os::raw::c_int),
+    >,
+    ///
+    /// Returns true (1) if the browser's audio is muted.  This function can only
+    /// be called on the UI thread.
+    ///
+    pub is_audio_muted: ::std::option::Option<
         unsafe extern "C" fn(self_: *mut _cef_browser_host_t) -> ::std::os::raw::c_int,
     >,
 }
 extern "C" {
     ///
-    /// Create a new browser window using the window parameters specified by
-    /// |windowInfo|. All values will be copied internally and the actual window will
-    /// be created on the UI thread. If |request_context| is NULL the global request
+    /// Create a new browser using the window parameters specified by |windowInfo|.
+    /// All values will be copied internally and the actual window (if any) will be
+    /// created on the UI thread. If |request_context| is NULL the global request
     /// context will be used. This function can be called on any browser process
-    /// thread and will not block.
+    /// thread and will not block. The optional |extra_info| parameter provides an
+    /// opportunity to specify extra information specific to the created browser that
+    /// will be passed to cef_render_process_handler_t::on_browser_created() in the
+    /// render process.
     ///
     pub fn cef_browser_host_create_browser(
         windowInfo: *const cef_window_info_t,
         client: *mut _cef_client_t,
         url: *const cef_string_t,
         settings: *const _cef_browser_settings_t,
+        extra_info: *mut _cef_dictionary_value_t,
         request_context: *mut _cef_request_context_t,
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
     ///
-    /// Create a new browser window using the window parameters specified by
-    /// |windowInfo|. If |request_context| is NULL the global request context will be
-    /// used. This function can only be called on the browser process UI thread.
+    /// Create a new browser using the window parameters specified by |windowInfo|.
+    /// If |request_context| is NULL the global request context will be used. This
+    /// function can only be called on the browser process UI thread. The optional
+    /// |extra_info| parameter provides an opportunity to specify extra information
+    /// specific to the created browser that will be passed to
+    /// cef_render_process_handler_t::on_browser_created() in the render process.
     ///
     pub fn cef_browser_host_create_browser_sync(
         windowInfo: *const cef_window_info_t,
         client: *mut _cef_client_t,
         url: *const cef_string_t,
         settings: *const _cef_browser_settings_t,
+        extra_info: *mut _cef_dictionary_value_t,
         request_context: *mut _cef_request_context_t,
     ) -> *mut cef_browser_t;
 }
@@ -7399,12 +8122,6 @@ pub struct _cef_print_settings_t {
     ///
     pub is_read_only: ::std::option::Option<
         unsafe extern "C" fn(self_: *mut _cef_print_settings_t) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Returns a writable copy of this object.
-    ///
-    pub copy: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_print_settings_t) -> *mut _cef_print_settings_t,
     >,
     ///
     /// Set the page orientation.
@@ -7669,6 +8386,7 @@ pub struct _cef_print_handler_t {
     pub get_pdf_paper_size: ::std::option::Option<
         unsafe extern "C" fn(
             self_: *mut _cef_print_handler_t,
+            browser: *mut _cef_browser_t,
             device_units_per_inch: ::std::os::raw::c_int,
         ) -> cef_size_t,
     >,
@@ -8659,17 +9377,2414 @@ pub struct _cef_context_menu_params_t {
     >,
     ///
     /// Returns true (1) if the context menu contains items specified by the
-    /// renderer process (for example, plugin placeholder or pepper plugin menu
-    /// items).
+    /// renderer process.
     ///
     pub is_custom_menu: ::std::option::Option<
         unsafe extern "C" fn(self_: *mut _cef_context_menu_params_t) -> ::std::os::raw::c_int,
     >,
+}
+///
+/// Implement this structure to handle audio events.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_audio_handler_t {
     ///
-    /// Returns true (1) if the context menu was invoked from a pepper plugin.
+    /// Base structure.
     ///
-    pub is_pepper_menu: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_context_menu_params_t) -> ::std::os::raw::c_int,
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Called on the UI thread to allow configuration of audio stream parameters.
+    /// Return true (1) to proceed with audio stream capture, or false (0) to
+    /// cancel it. All members of |params| can optionally be configured here, but
+    /// they are also pre-filled with some sensible defaults.
+    ///
+    pub get_audio_parameters: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_audio_handler_t,
+            browser: *mut _cef_browser_t,
+            params: *mut cef_audio_parameters_t,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Called on a browser audio capture thread when the browser starts streaming
+    /// audio. OnAudioSteamStopped will always be called after
+    /// OnAudioStreamStarted; both functions may be called multiple times for the
+    /// same browser. |params| contains the audio parameters like sample rate and
+    /// channel layout. |channels| is the number of channels.
+    ///
+    pub on_audio_stream_started: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_audio_handler_t,
+            browser: *mut _cef_browser_t,
+            params: *const cef_audio_parameters_t,
+            channels: ::std::os::raw::c_int,
+        ),
+    >,
+    ///
+    /// Called on the audio stream thread when a PCM packet is received for the
+    /// stream. |data| is an array representing the raw PCM data as a floating
+    /// point type, i.e. 4-byte value(s). |frames| is the number of frames in the
+    /// PCM packet. |pts| is the presentation timestamp (in milliseconds since the
+    /// Unix Epoch) and represents the time at which the decompressed packet should
+    /// be presented to the user. Based on |frames| and the |channel_layout| value
+    /// passed to OnAudioStreamStarted you can calculate the size of the |data|
+    /// array in bytes.
+    ///
+    pub on_audio_stream_packet: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_audio_handler_t,
+            browser: *mut _cef_browser_t,
+            data: *mut *const f32,
+            frames: ::std::os::raw::c_int,
+            pts: int64,
+        ),
+    >,
+    ///
+    /// Called on the UI thread when the stream has stopped. OnAudioSteamStopped
+    /// will always be called after OnAudioStreamStarted; both functions may be
+    /// called multiple times for the same stream.
+    ///
+    pub on_audio_stream_stopped: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_audio_handler_t, browser: *mut _cef_browser_t),
+    >,
+    ///
+    /// Called on the UI or audio stream thread when an error occurred. During the
+    /// stream creation phase this callback will be called on the UI thread while
+    /// in the capturing phase it will be called on the audio stream thread. The
+    /// stream will be stopped immediately.
+    ///
+    pub on_audio_stream_error: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_audio_handler_t,
+            browser: *mut _cef_browser_t,
+            message: *const cef_string_t,
+        ),
+    >,
+}
+///
+/// Callback structure for asynchronous continuation of file dialog requests.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_file_dialog_callback_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Continue the file selection. |selected_accept_filter| should be the 0-based
+    /// index of the value selected from the accept filters array passed to
+    /// cef_dialog_handler_t::OnFileDialog. |file_paths| should be a single value
+    /// or a list of values depending on the dialog mode. An NULL |file_paths|
+    /// value is treated the same as calling cancel().
+    ///
+    pub cont: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_file_dialog_callback_t,
+            selected_accept_filter: ::std::os::raw::c_int,
+            file_paths: cef_string_list_t,
+        ),
+    >,
+    ///
+    /// Cancel the file selection.
+    ///
+    pub cancel:
+        ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_file_dialog_callback_t)>,
+}
+///
+/// Implement this structure to handle dialog events. The functions of this
+/// structure will be called on the browser process UI thread.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_dialog_handler_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Called to run a file chooser dialog. |mode| represents the type of dialog
+    /// to display. |title| to the title to be used for the dialog and may be NULL
+    /// to show the default title ("Open" or "Save" depending on the mode).
+    /// |default_file_path| is the path with optional directory and/or file name
+    /// component that should be initially selected in the dialog. |accept_filters|
+    /// are used to restrict the selectable file types and may any combination of
+    /// (a) valid lower-cased MIME types (e.g. "text/*" or "image/*"), (b)
+    /// individual file extensions (e.g. ".txt" or ".png"), or (c) combined
+    /// description and file extension delimited using "|" and ";" (e.g. "Image
+    /// Types|.png;.gif;.jpg"). |selected_accept_filter| is the 0-based index of
+    /// the filter that should be selected by default. To display a custom dialog
+    /// return true (1) and execute |callback| either inline or at a later time. To
+    /// display the default dialog return false (0).
+    ///
+    pub on_file_dialog: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_dialog_handler_t,
+            browser: *mut _cef_browser_t,
+            mode: cef_file_dialog_mode_t,
+            title: *const cef_string_t,
+            default_file_path: *const cef_string_t,
+            accept_filters: cef_string_list_t,
+            selected_accept_filter: ::std::os::raw::c_int,
+            callback: *mut _cef_file_dialog_callback_t,
+        ) -> ::std::os::raw::c_int,
+    >,
+}
+///
+/// Implement this structure to handle events related to browser display state.
+/// The functions of this structure will be called on the UI thread.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_display_handler_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Called when a frame's address has changed.
+    ///
+    pub on_address_change: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_display_handler_t,
+            browser: *mut _cef_browser_t,
+            frame: *mut _cef_frame_t,
+            url: *const cef_string_t,
+        ),
+    >,
+    ///
+    /// Called when the page title changes.
+    ///
+    pub on_title_change: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_display_handler_t,
+            browser: *mut _cef_browser_t,
+            title: *const cef_string_t,
+        ),
+    >,
+    ///
+    /// Called when the page icon changes.
+    ///
+    pub on_favicon_urlchange: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_display_handler_t,
+            browser: *mut _cef_browser_t,
+            icon_urls: cef_string_list_t,
+        ),
+    >,
+    ///
+    /// Called when web content in the page has toggled fullscreen mode. If
+    /// |fullscreen| is true (1) the content will automatically be sized to fill
+    /// the browser content area. If |fullscreen| is false (0) the content will
+    /// automatically return to its original size and position. The client is
+    /// responsible for resizing the browser if desired.
+    ///
+    pub on_fullscreen_mode_change: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_display_handler_t,
+            browser: *mut _cef_browser_t,
+            fullscreen: ::std::os::raw::c_int,
+        ),
+    >,
+    ///
+    /// Called when the browser is about to display a tooltip. |text| contains the
+    /// text that will be displayed in the tooltip. To handle the display of the
+    /// tooltip yourself return true (1). Otherwise, you can optionally modify
+    /// |text| and then return false (0) to allow the browser to display the
+    /// tooltip. When window rendering is disabled the application is responsible
+    /// for drawing tooltips and the return value is ignored.
+    ///
+    pub on_tooltip: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_display_handler_t,
+            browser: *mut _cef_browser_t,
+            text: *mut cef_string_t,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Called when the browser receives a status message. |value| contains the
+    /// text that will be displayed in the status message.
+    ///
+    pub on_status_message: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_display_handler_t,
+            browser: *mut _cef_browser_t,
+            value: *const cef_string_t,
+        ),
+    >,
+    ///
+    /// Called to display a console message. Return true (1) to stop the message
+    /// from being output to the console.
+    ///
+    pub on_console_message: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_display_handler_t,
+            browser: *mut _cef_browser_t,
+            level: cef_log_severity_t,
+            message: *const cef_string_t,
+            source: *const cef_string_t,
+            line: ::std::os::raw::c_int,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Called when auto-resize is enabled via
+    /// cef_browser_host_t::SetAutoResizeEnabled and the contents have auto-
+    /// resized. |new_size| will be the desired size in view coordinates. Return
+    /// true (1) if the resize was handled or false (0) for default handling.
+    ///
+    pub on_auto_resize: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_display_handler_t,
+            browser: *mut _cef_browser_t,
+            new_size: *const cef_size_t,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Called when the overall page loading progress has changed. |progress|
+    /// ranges from 0.0 to 1.0.
+    ///
+    pub on_loading_progress_change: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_display_handler_t,
+            browser: *mut _cef_browser_t,
+            progress: f64,
+        ),
+    >,
+    ///
+    /// Called when the browser's cursor has changed. If |type| is CT_CUSTOM then
+    /// |custom_cursor_info| will be populated with the custom cursor information.
+    /// Return true (1) if the cursor change was handled or false (0) for default
+    /// handling.
+    ///
+    pub on_cursor_change: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_display_handler_t,
+            browser: *mut _cef_browser_t,
+            cursor: *mut ::std::os::raw::c_void,
+            type_: cef_cursor_type_t,
+            custom_cursor_info: *const _cef_cursor_info_t,
+        ) -> ::std::os::raw::c_int,
+    >,
+}
+///
+/// Structure used to represent a download item.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_download_item_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Returns true (1) if this object is valid. Do not call any other functions
+    /// if this function returns false (0).
+    ///
+    pub is_valid: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Returns true (1) if the download is in progress.
+    ///
+    pub is_in_progress: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Returns true (1) if the download is complete.
+    ///
+    pub is_complete: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Returns true (1) if the download has been canceled or interrupted.
+    ///
+    pub is_canceled: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Returns a simple speed estimate in bytes/s.
+    ///
+    pub get_current_speed:
+        ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> int64>,
+    ///
+    /// Returns the rough percent complete or -1 if the receive total size is
+    /// unknown.
+    ///
+    pub get_percent_complete: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Returns the total number of bytes.
+    ///
+    pub get_total_bytes:
+        ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> int64>,
+    ///
+    /// Returns the number of received bytes.
+    ///
+    pub get_received_bytes:
+        ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> int64>,
+    ///
+    /// Returns the time that the download started.
+    ///
+    pub get_start_time:
+        ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> cef_time_t>,
+    ///
+    /// Returns the time that the download ended.
+    ///
+    pub get_end_time:
+        ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> cef_time_t>,
+    ///
+    /// Returns the full path to the downloaded or downloading file.
+    ///
+    /// The resulting string must be freed by calling cef_string_userfree_free().
+    pub get_full_path: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> cef_string_userfree_t,
+    >,
+    ///
+    /// Returns the unique identifier for this download.
+    ///
+    pub get_id:
+        ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> uint32>,
+    ///
+    /// Returns the URL.
+    ///
+    /// The resulting string must be freed by calling cef_string_userfree_free().
+    pub get_url: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> cef_string_userfree_t,
+    >,
+    ///
+    /// Returns the original URL before any redirections.
+    ///
+    /// The resulting string must be freed by calling cef_string_userfree_free().
+    pub get_original_url: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> cef_string_userfree_t,
+    >,
+    ///
+    /// Returns the suggested file name.
+    ///
+    /// The resulting string must be freed by calling cef_string_userfree_free().
+    pub get_suggested_file_name: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> cef_string_userfree_t,
+    >,
+    ///
+    /// Returns the content disposition.
+    ///
+    /// The resulting string must be freed by calling cef_string_userfree_free().
+    pub get_content_disposition: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> cef_string_userfree_t,
+    >,
+    ///
+    /// Returns the mime type.
+    ///
+    /// The resulting string must be freed by calling cef_string_userfree_free().
+    pub get_mime_type: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> cef_string_userfree_t,
+    >,
+}
+///
+/// Callback structure used to asynchronously continue a download.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_before_download_callback_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Call to continue the download. Set |download_path| to the full file path
+    /// for the download including the file name or leave blank to use the
+    /// suggested name and the default temp directory. Set |show_dialog| to true
+    /// (1) if you do wish to show the default "Save As" dialog.
+    ///
+    pub cont: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_before_download_callback_t,
+            download_path: *const cef_string_t,
+            show_dialog: ::std::os::raw::c_int,
+        ),
+    >,
+}
+///
+/// Callback structure used to asynchronously cancel a download.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_download_item_callback_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Call to cancel the download.
+    ///
+    pub cancel:
+        ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_download_item_callback_t)>,
+    ///
+    /// Call to pause the download.
+    ///
+    pub pause:
+        ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_download_item_callback_t)>,
+    ///
+    /// Call to resume the download.
+    ///
+    pub resume:
+        ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_download_item_callback_t)>,
+}
+///
+/// Structure used to handle file downloads. The functions of this structure will
+/// called on the browser process UI thread.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_download_handler_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Called before a download begins. |suggested_name| is the suggested name for
+    /// the download file. By default the download will be canceled. Execute
+    /// |callback| either asynchronously or in this function to continue the
+    /// download if desired. Do not keep a reference to |download_item| outside of
+    /// this function.
+    ///
+    pub on_before_download: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_download_handler_t,
+            browser: *mut _cef_browser_t,
+            download_item: *mut _cef_download_item_t,
+            suggested_name: *const cef_string_t,
+            callback: *mut _cef_before_download_callback_t,
+        ),
+    >,
+    ///
+    /// Called when a download's status or progress information has been updated.
+    /// This may be called multiple times before and after on_before_download().
+    /// Execute |callback| either asynchronously or in this function to cancel the
+    /// download if desired. Do not keep a reference to |download_item| outside of
+    /// this function.
+    ///
+    pub on_download_updated: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_download_handler_t,
+            browser: *mut _cef_browser_t,
+            download_item: *mut _cef_download_item_t,
+            callback: *mut _cef_download_item_callback_t,
+        ),
+    >,
+}
+///
+/// Implement this structure to handle events related to dragging. The functions
+/// of this structure will be called on the UI thread.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_drag_handler_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Called when an external drag event enters the browser window. |dragData|
+    /// contains the drag event data and |mask| represents the type of drag
+    /// operation. Return false (0) for default drag handling behavior or true (1)
+    /// to cancel the drag event.
+    ///
+    pub on_drag_enter: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_drag_handler_t,
+            browser: *mut _cef_browser_t,
+            dragData: *mut _cef_drag_data_t,
+            mask: cef_drag_operations_mask_t,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Called whenever draggable regions for the browser window change. These can
+    /// be specified using the '-webkit-app-region: drag/no-drag' CSS-property. If
+    /// draggable regions are never defined in a document this function will also
+    /// never be called. If the last draggable region is removed from a document
+    /// this function will be called with an NULL vector.
+    ///
+    pub on_draggable_regions_changed: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_drag_handler_t,
+            browser: *mut _cef_browser_t,
+            frame: *mut _cef_frame_t,
+            regionsCount: usize,
+            regions: *const cef_draggable_region_t,
+        ),
+    >,
+}
+///
+/// Implement this structure to handle events related to find results. The
+/// functions of this structure will be called on the UI thread.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_find_handler_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Called to report find results returned by cef_browser_host_t::find().
+    /// |identifer| is a unique incremental identifier for the currently active
+    /// search, |count| is the number of matches currently identified,
+    /// |selectionRect| is the location of where the match was found (in window
+    /// coordinates), |activeMatchOrdinal| is the current position in the search
+    /// results, and |finalUpdate| is true (1) if this is the last find
+    /// notification.
+    ///
+    pub on_find_result: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_find_handler_t,
+            browser: *mut _cef_browser_t,
+            identifier: ::std::os::raw::c_int,
+            count: ::std::os::raw::c_int,
+            selectionRect: *const cef_rect_t,
+            activeMatchOrdinal: ::std::os::raw::c_int,
+            finalUpdate: ::std::os::raw::c_int,
+        ),
+    >,
+}
+///
+/// Implement this structure to handle events related to focus. The functions of
+/// this structure will be called on the UI thread.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_focus_handler_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Called when the browser component is about to loose focus. For instance, if
+    /// focus was on the last HTML element and the user pressed the TAB key. |next|
+    /// will be true (1) if the browser is giving focus to the next component and
+    /// false (0) if the browser is giving focus to the previous component.
+    ///
+    pub on_take_focus: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_focus_handler_t,
+            browser: *mut _cef_browser_t,
+            next: ::std::os::raw::c_int,
+        ),
+    >,
+    ///
+    /// Called when the browser component is requesting focus. |source| indicates
+    /// where the focus request is originating from. Return false (0) to allow the
+    /// focus to be set or true (1) to cancel setting the focus.
+    ///
+    pub on_set_focus: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_focus_handler_t,
+            browser: *mut _cef_browser_t,
+            source: cef_focus_source_t,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Called when the browser component has received focus.
+    ///
+    pub on_got_focus: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_focus_handler_t, browser: *mut _cef_browser_t),
+    >,
+}
+///
+/// Implement this structure to handle events related to cef_frame_t life span.
+/// The order of callbacks is:
+///
+/// (1) During initial cef_browser_host_t creation and navigation of the main
+/// frame: - cef_frame_handler_t::OnFrameCreated => The initial main frame object
+/// has been
+///   created. Any commands will be queued until the frame is attached.
+/// - cef_frame_handler_t::OnMainFrameChanged => The initial main frame object
+/// has
+///   been assigned to the browser.
+/// - cef_life_span_handler_t::OnAfterCreated => The browser is now valid and can
+/// be
+///   used.
+/// - cef_frame_handler_t::OnFrameAttached => The initial main frame object is
+/// now
+///   connected to its peer in the renderer process. Commands can be routed.
+///
+/// (2) During further cef_browser_host_t navigation/loading of the main frame
+/// and/or sub-frames: - cef_frame_handler_t::OnFrameCreated => A new main frame
+/// or sub-frame object has
+///   been created. Any commands will be queued until the frame is attached.
+/// - cef_frame_handler_t::OnFrameAttached => A new main frame or sub-frame
+/// object is
+///   now connected to its peer in the renderer process. Commands can be routed.
+/// - cef_frame_handler_t::OnFrameDetached => An existing main frame or sub-frame
+///   object has lost its connection to the renderer process. If multiple objects
+///   are detached at the same time then notifications will be sent for any
+///   sub-frame objects before the main frame object. Commands can no longer be
+///   routed and will be discarded.
+/// - cef_frame_handler_t::OnMainFrameChanged => A new main frame object has been
+///   assigned to the browser. This will only occur with cross-origin navigation
+///   or re-navigation after renderer process termination (due to crashes, etc).
+///
+/// (3) During final cef_browser_host_t destruction of the main frame: -
+/// cef_frame_handler_t::OnFrameDetached => Any sub-frame objects have lost their
+///   connection to the renderer process. Commands can no longer be routed and
+///   will be discarded.
+/// - cef_life_span_handler_t::OnBeforeClose => The browser has been destroyed. -
+/// cef_frame_handler_t::OnFrameDetached => The main frame object have lost its
+///   connection to the renderer process. Notifications will be sent for any
+///   sub-frame objects before the main frame object. Commands can no longer be
+///   routed and will be discarded.
+/// - cef_frame_handler_t::OnMainFrameChanged => The final main frame object has
+/// been
+///   removed from the browser.
+///
+/// Cross-origin navigation and/or loading receives special handling.
+///
+/// When the main frame navigates to a different origin the OnMainFrameChanged
+/// callback (2) will be executed with the old and new main frame objects.
+///
+/// When a new sub-frame is loaded in, or an existing sub-frame is navigated to,
+/// a different origin from the parent frame, a temporary sub-frame object will
+/// first be created in the parent's renderer process. That temporary sub-frame
+/// will then be discarded after the real cross-origin sub-frame is created in
+/// the new/target renderer process. The client will receive cross-origin
+/// navigation callbacks (2) for the transition from the temporary sub-frame to
+/// the real sub-frame. The temporary sub-frame will not recieve or execute
+/// commands during this transitional period (any sent commands will be
+/// discarded).
+///
+/// When a new popup browser is created in a different origin from the parent
+/// browser, a temporary main frame object for the popup will first be created in
+/// the parent's renderer process. That temporary main frame will then be
+/// discarded after the real cross-origin main frame is created in the new/target
+/// renderer process. The client will recieve creation and initial navigation
+/// callbacks (1) for the temporary main frame, followed by cross-origin
+/// navigation callbacks (2) for the transition from the temporary main frame to
+/// the real main frame. The temporary main frame may receive and execute
+/// commands during this transitional period (any sent commands may be executed,
+/// but the behavior is potentially undesirable since they execute in the parent
+/// browser's renderer process and not the new/target renderer process).
+///
+/// Callbacks will not be executed for placeholders that may be created during
+/// pre-commit navigation for sub-frames that do not yet exist in the renderer
+/// process. Placeholders will have cef_frame_t::get_identifier() == -4.
+///
+/// The functions of this structure will be called on the UI thread unless
+/// otherwise indicated.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_frame_handler_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Called when a new frame is created. This will be the first notification
+    /// that references |frame|. Any commands that require transport to the
+    /// associated renderer process (LoadRequest, SendProcessMessage, GetSource,
+    /// etc.) will be queued until OnFrameAttached is called for |frame|.
+    ///
+    pub on_frame_created: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_frame_handler_t,
+            browser: *mut _cef_browser_t,
+            frame: *mut _cef_frame_t,
+        ),
+    >,
+    ///
+    /// Called when a frame can begin routing commands to/from the associated
+    /// renderer process. |reattached| will be true (1) if the frame was re-
+    /// attached after exiting the BackForwardCache. Any commands that were queued
+    /// have now been dispatched.
+    ///
+    pub on_frame_attached: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_frame_handler_t,
+            browser: *mut _cef_browser_t,
+            frame: *mut _cef_frame_t,
+            reattached: ::std::os::raw::c_int,
+        ),
+    >,
+    ///
+    /// Called when a frame loses its connection to the renderer process and will
+    /// be destroyed. Any pending or future commands will be discarded and
+    /// cef_frame_t::is_valid() will now return false (0) for |frame|. If called
+    /// after cef_life_span_handler_t::on_before_close() during browser destruction
+    /// then cef_browser_t::is_valid() will return false (0) for |browser|.
+    ///
+    pub on_frame_detached: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_frame_handler_t,
+            browser: *mut _cef_browser_t,
+            frame: *mut _cef_frame_t,
+        ),
+    >,
+    ///
+    /// Called when the main frame changes due to (a) initial browser creation, (b)
+    /// final browser destruction, (c) cross-origin navigation or (d) re-navigation
+    /// after renderer process termination (due to crashes, etc). |old_frame| will
+    /// be NULL and |new_frame| will be non-NULL when a main frame is assigned to
+    /// |browser| for the first time. |old_frame| will be non-NULL and |new_frame|
+    /// will be NULL and  when a main frame is removed from |browser| for the last
+    /// time. Both |old_frame| and |new_frame| will be non-NULL for cross-origin
+    /// navigations or re-navigation after renderer process termination. This
+    /// function will be called after on_frame_created() for |new_frame| and/or
+    /// after on_frame_detached() for |old_frame|. If called after
+    /// cef_life_span_handler_t::on_before_close() during browser destruction then
+    /// cef_browser_t::is_valid() will return false (0) for |browser|.
+    ///
+    pub on_main_frame_changed: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_frame_handler_t,
+            browser: *mut _cef_browser_t,
+            old_frame: *mut _cef_frame_t,
+            new_frame: *mut _cef_frame_t,
+        ),
+    >,
+}
+///
+/// Callback structure used for asynchronous continuation of JavaScript dialog
+/// requests.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_jsdialog_callback_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Continue the JS dialog request. Set |success| to true (1) if the OK button
+    /// was pressed. The |user_input| value should be specified for prompt dialogs.
+    ///
+    pub cont: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_jsdialog_callback_t,
+            success: ::std::os::raw::c_int,
+            user_input: *const cef_string_t,
+        ),
+    >,
+}
+///
+/// Implement this structure to handle events related to JavaScript dialogs. The
+/// functions of this structure will be called on the UI thread.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_jsdialog_handler_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Called to run a JavaScript dialog. If |origin_url| is non-NULL it can be
+    /// passed to the CefFormatUrlForSecurityDisplay function to retrieve a secure
+    /// and user-friendly display string. The |default_prompt_text| value will be
+    /// specified for prompt dialogs only. Set |suppress_message| to true (1) and
+    /// return false (0) to suppress the message (suppressing messages is
+    /// preferable to immediately executing the callback as this is used to detect
+    /// presumably malicious behavior like spamming alert messages in
+    /// onbeforeunload). Set |suppress_message| to false (0) and return false (0)
+    /// to use the default implementation (the default implementation will show one
+    /// modal dialog at a time and suppress any additional dialog requests until
+    /// the displayed dialog is dismissed). Return true (1) if the application will
+    /// use a custom dialog or if the callback has been executed immediately.
+    /// Custom dialogs may be either modal or modeless. If a custom dialog is used
+    /// the application must execute |callback| once the custom dialog is
+    /// dismissed.
+    ///
+    pub on_jsdialog: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_jsdialog_handler_t,
+            browser: *mut _cef_browser_t,
+            origin_url: *const cef_string_t,
+            dialog_type: cef_jsdialog_type_t,
+            message_text: *const cef_string_t,
+            default_prompt_text: *const cef_string_t,
+            callback: *mut _cef_jsdialog_callback_t,
+            suppress_message: *mut ::std::os::raw::c_int,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Called to run a dialog asking the user if they want to leave a page. Return
+    /// false (0) to use the default dialog implementation. Return true (1) if the
+    /// application will use a custom dialog or if the callback has been executed
+    /// immediately. Custom dialogs may be either modal or modeless. If a custom
+    /// dialog is used the application must execute |callback| once the custom
+    /// dialog is dismissed.
+    ///
+    pub on_before_unload_dialog: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_jsdialog_handler_t,
+            browser: *mut _cef_browser_t,
+            message_text: *const cef_string_t,
+            is_reload: ::std::os::raw::c_int,
+            callback: *mut _cef_jsdialog_callback_t,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Called to cancel any pending dialogs and reset any saved dialog state. Will
+    /// be called due to events like page navigation irregardless of whether any
+    /// dialogs are currently pending.
+    ///
+    pub on_reset_dialog_state: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_jsdialog_handler_t, browser: *mut _cef_browser_t),
+    >,
+    ///
+    /// Called when the default implementation dialog is closed.
+    ///
+    pub on_dialog_closed: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_jsdialog_handler_t, browser: *mut _cef_browser_t),
+    >,
+}
+///
+/// Implement this structure to handle events related to keyboard input. The
+/// functions of this structure will be called on the UI thread.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_keyboard_handler_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Called before a keyboard event is sent to the renderer. |event| contains
+    /// information about the keyboard event. |os_event| is the operating system
+    /// event message, if any. Return true (1) if the event was handled or false
+    /// (0) otherwise. If the event will be handled in on_key_event() as a keyboard
+    /// shortcut set |is_keyboard_shortcut| to true (1) and return false (0).
+    ///
+    pub on_pre_key_event: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_keyboard_handler_t,
+            browser: *mut _cef_browser_t,
+            event: *const _cef_key_event_t,
+            os_event: *mut ::std::os::raw::c_void,
+            is_keyboard_shortcut: *mut ::std::os::raw::c_int,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Called after the renderer and JavaScript in the page has had a chance to
+    /// handle the event. |event| contains information about the keyboard event.
+    /// |os_event| is the operating system event message, if any. Return true (1)
+    /// if the keyboard event was handled or false (0) otherwise.
+    ///
+    pub on_key_event: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_keyboard_handler_t,
+            browser: *mut _cef_browser_t,
+            event: *const _cef_key_event_t,
+            os_event: *mut ::std::os::raw::c_void,
+        ) -> ::std::os::raw::c_int,
+    >,
+}
+///
+/// Implement this structure to handle events related to browser life span. The
+/// functions of this structure will be called on the UI thread unless otherwise
+/// indicated.
+///
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct _cef_life_span_handler_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Called on the UI thread before a new popup browser is created. The
+    /// |browser| and |frame| values represent the source of the popup request. The
+    /// |target_url| and |target_frame_name| values indicate where the popup
+    /// browser should navigate and may be NULL if not specified with the request.
+    /// The |target_disposition| value indicates where the user intended to open
+    /// the popup (e.g. current tab, new tab, etc). The |user_gesture| value will
+    /// be true (1) if the popup was opened via explicit user gesture (e.g.
+    /// clicking a link) or false (0) if the popup opened automatically (e.g. via
+    /// the DomContentLoaded event). The |popupFeatures| structure contains
+    /// additional information about the requested popup window. To allow creation
+    /// of the popup browser optionally modify |windowInfo|, |client|, |settings|
+    /// and |no_javascript_access| and return false (0). To cancel creation of the
+    /// popup browser return true (1). The |client| and |settings| values will
+    /// default to the source browser's values. If the |no_javascript_access| value
+    /// is set to false (0) the new browser will not be scriptable and may not be
+    /// hosted in the same renderer process as the source browser. Any
+    /// modifications to |windowInfo| will be ignored if the parent browser is
+    /// wrapped in a cef_browser_view_t. Popup browser creation will be canceled if
+    /// the parent browser is destroyed before the popup browser creation completes
+    /// (indicated by a call to OnAfterCreated for the popup browser). The
+    /// |extra_info| parameter provides an opportunity to specify extra information
+    /// specific to the created popup browser that will be passed to
+    /// cef_render_process_handler_t::on_browser_created() in the render process.
+    ///
+    pub on_before_popup: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_life_span_handler_t,
+            browser: *mut _cef_browser_t,
+            frame: *mut _cef_frame_t,
+            target_url: *const cef_string_t,
+            target_frame_name: *const cef_string_t,
+            target_disposition: cef_window_open_disposition_t,
+            user_gesture: ::std::os::raw::c_int,
+            popupFeatures: *const _cef_popup_features_t,
+            windowInfo: *mut _cef_window_info_t,
+            client: *mut *mut _cef_client_t,
+            settings: *mut _cef_browser_settings_t,
+            extra_info: *mut *mut _cef_dictionary_value_t,
+            no_javascript_access: *mut ::std::os::raw::c_int,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Called after a new browser is created. It is now safe to begin performing
+    /// actions with |browser|. cef_frame_handler_t callbacks related to initial
+    /// main frame creation will arrive before this callback. See
+    /// cef_frame_handler_t documentation for additional usage information.
+    ///
+    pub on_after_created: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_life_span_handler_t, browser: *mut _cef_browser_t),
+    >,
+    ///
+    /// Called when a browser has recieved a request to close. This may result
+    /// directly from a call to cef_browser_host_t::*close_browser() or indirectly
+    /// if the browser is parented to a top-level window created by CEF and the
+    /// user attempts to close that window (by clicking the 'X', for example). The
+    /// do_close() function will be called after the JavaScript 'onunload' event
+    /// has been fired.
+    ///
+    /// An application should handle top-level owner window close notifications by
+    /// calling cef_browser_host_t::try_close_browser() or
+    /// cef_browser_host_t::CloseBrowser(false (0)) instead of allowing the window
+    /// to close immediately (see the examples below). This gives CEF an
+    /// opportunity to process the 'onbeforeunload' event and optionally cancel the
+    /// close before do_close() is called.
+    ///
+    /// When windowed rendering is enabled CEF will internally create a window or
+    /// view to host the browser. In that case returning false (0) from do_close()
+    /// will send the standard close notification to the browser's top-level owner
+    /// window (e.g. WM_CLOSE on Windows, performClose: on OS X, "delete_event" on
+    /// Linux or cef_window_delegate_t::can_close() callback from Views). If the
+    /// browser's host window/view has already been destroyed (via view hierarchy
+    /// tear-down, for example) then do_close() will not be called for that browser
+    /// since is no longer possible to cancel the close.
+    ///
+    /// When windowed rendering is disabled returning false (0) from do_close()
+    /// will cause the browser object to be destroyed immediately.
+    ///
+    /// If the browser's top-level owner window requires a non-standard close
+    /// notification then send that notification from do_close() and return true
+    /// (1).
+    ///
+    /// The cef_life_span_handler_t::on_before_close() function will be called
+    /// after do_close() (if do_close() is called) and immediately before the
+    /// browser object is destroyed. The application should only exit after
+    /// on_before_close() has been called for all existing browsers.
+    ///
+    /// The below examples describe what should happen during window close when the
+    /// browser is parented to an application-provided top-level window.
+    ///
+    /// Example 1: Using cef_browser_host_t::try_close_browser(). This is
+    /// recommended for clients using standard close handling and windows created
+    /// on the browser process UI thread. 1.  User clicks the window close button
+    /// which sends a close notification to
+    ///     the application's top-level window.
+    /// 2.  Application's top-level window receives the close notification and
+    ///     calls TryCloseBrowser() (which internally calls CloseBrowser(false)).
+    ///     TryCloseBrowser() returns false so the client cancels the window close.
+    /// 3.  JavaScript 'onbeforeunload' handler executes and shows the close
+    ///     confirmation dialog (which can be overridden via
+    ///     CefJSDialogHandler::OnBeforeUnloadDialog()).
+    /// 4.  User approves the close. 5.  JavaScript 'onunload' handler executes. 6.
+    /// CEF sends a close notification to the application's top-level window
+    ///     (because DoClose() returned false by default).
+    /// 7.  Application's top-level window receives the close notification and
+    ///     calls TryCloseBrowser(). TryCloseBrowser() returns true so the client
+    ///     allows the window close.
+    /// 8.  Application's top-level window is destroyed. 9.  Application's
+    /// on_before_close() handler is called and the browser object
+    ///     is destroyed.
+    /// 10. Application exits by calling cef_quit_message_loop() if no other
+    /// browsers
+    ///     exist.
+    ///
+    /// Example 2: Using cef_browser_host_t::CloseBrowser(false (0)) and
+    /// implementing the do_close() callback. This is recommended for clients using
+    /// non-standard close handling or windows that were not created on the browser
+    /// process UI thread. 1.  User clicks the window close button which sends a
+    /// close notification to
+    ///     the application's top-level window.
+    /// 2.  Application's top-level window receives the close notification and:
+    ///     A. Calls CefBrowserHost::CloseBrowser(false).
+    ///     B. Cancels the window close.
+    /// 3.  JavaScript 'onbeforeunload' handler executes and shows the close
+    ///     confirmation dialog (which can be overridden via
+    ///     CefJSDialogHandler::OnBeforeUnloadDialog()).
+    /// 4.  User approves the close. 5.  JavaScript 'onunload' handler executes. 6.
+    /// Application's do_close() handler is called. Application will:
+    ///     A. Set a flag to indicate that the next close attempt will be allowed.
+    ///     B. Return false.
+    /// 7.  CEF sends an close notification to the application's top-level window.
+    /// 8.  Application's top-level window receives the close notification and
+    ///     allows the window to close based on the flag from #6B.
+    /// 9.  Application's top-level window is destroyed. 10. Application's
+    /// on_before_close() handler is called and the browser object
+    ///     is destroyed.
+    /// 11. Application exits by calling cef_quit_message_loop() if no other
+    /// browsers
+    ///     exist.
+    ///
+    pub do_close: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_life_span_handler_t,
+            browser: *mut _cef_browser_t,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Called just before a browser is destroyed. Release all references to the
+    /// browser object and do not attempt to execute any functions on the browser
+    /// object (other than IsValid, GetIdentifier or IsSame) after this callback
+    /// returns. cef_frame_handler_t callbacks related to final main frame
+    /// destruction will arrive after this callback and cef_browser_t::IsValid will
+    /// return false (0) at that time. Any in-progress network requests associated
+    /// with |browser| will be aborted when the browser is destroyed, and
+    /// cef_resource_request_handler_t callbacks related to those requests may
+    /// still arrive on the IO thread after this callback. See cef_frame_handler_t
+    /// and do_close() documentation for additional usage information.
+    ///
+    pub on_before_close: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_life_span_handler_t, browser: *mut _cef_browser_t),
+    >,
+}
+///
+/// Implement this structure to handle events related to browser load status. The
+/// functions of this structure will be called on the browser process UI thread
+/// or render process main thread (TID_RENDERER).
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_load_handler_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Called when the loading state has changed. This callback will be executed
+    /// twice -- once when loading is initiated either programmatically or by user
+    /// action, and once when loading is terminated due to completion, cancellation
+    /// of failure. It will be called before any calls to OnLoadStart and after all
+    /// calls to OnLoadError and/or OnLoadEnd.
+    ///
+    pub on_loading_state_change: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_load_handler_t,
+            browser: *mut _cef_browser_t,
+            isLoading: ::std::os::raw::c_int,
+            canGoBack: ::std::os::raw::c_int,
+            canGoForward: ::std::os::raw::c_int,
+        ),
+    >,
+    ///
+    /// Called after a navigation has been committed and before the browser begins
+    /// loading contents in the frame. The |frame| value will never be NULL -- call
+    /// the is_main() function to check if this frame is the main frame.
+    /// |transition_type| provides information about the source of the navigation
+    /// and an accurate value is only available in the browser process. Multiple
+    /// frames may be loading at the same time. Sub-frames may start or continue
+    /// loading after the main frame load has ended. This function will not be
+    /// called for same page navigations (fragments, history state, etc.) or for
+    /// navigations that fail or are canceled before commit. For notification of
+    /// overall browser load status use OnLoadingStateChange instead.
+    ///
+    pub on_load_start: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_load_handler_t,
+            browser: *mut _cef_browser_t,
+            frame: *mut _cef_frame_t,
+            transition_type: cef_transition_type_t,
+        ),
+    >,
+    ///
+    /// Called when the browser is done loading a frame. The |frame| value will
+    /// never be NULL -- call the is_main() function to check if this frame is the
+    /// main frame. Multiple frames may be loading at the same time. Sub-frames may
+    /// start or continue loading after the main frame load has ended. This
+    /// function will not be called for same page navigations (fragments, history
+    /// state, etc.) or for navigations that fail or are canceled before commit.
+    /// For notification of overall browser load status use OnLoadingStateChange
+    /// instead.
+    ///
+    pub on_load_end: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_load_handler_t,
+            browser: *mut _cef_browser_t,
+            frame: *mut _cef_frame_t,
+            httpStatusCode: ::std::os::raw::c_int,
+        ),
+    >,
+    ///
+    /// Called when a navigation fails or is canceled. This function may be called
+    /// by itself if before commit or in combination with OnLoadStart/OnLoadEnd if
+    /// after commit. |errorCode| is the error code number, |errorText| is the
+    /// error text and |failedUrl| is the URL that failed to load. See
+    /// net\base\net_error_list.h for complete descriptions of the error codes.
+    ///
+    pub on_load_error: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_load_handler_t,
+            browser: *mut _cef_browser_t,
+            frame: *mut _cef_frame_t,
+            errorCode: cef_errorcode_t,
+            errorText: *const cef_string_t,
+            failedUrl: *const cef_string_t,
+        ),
+    >,
+}
+///
+/// Implement this structure to receive accessibility notification when
+/// accessibility events have been registered. The functions of this structure
+/// will be called on the UI thread.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_accessibility_handler_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Called after renderer process sends accessibility tree changes to the
+    /// browser process.
+    ///
+    pub on_accessibility_tree_change: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_accessibility_handler_t, value: *mut _cef_value_t),
+    >,
+    ///
+    /// Called after renderer process sends accessibility location changes to the
+    /// browser process.
+    ///
+    pub on_accessibility_location_change: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_accessibility_handler_t, value: *mut _cef_value_t),
+    >,
+}
+///
+/// Implement this structure to handle events when window rendering is disabled.
+/// The functions of this structure will be called on the UI thread.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_render_handler_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Return the handler for accessibility notifications. If no handler is
+    /// provided the default implementation will be used.
+    ///
+    pub get_accessibility_handler: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_render_handler_t,
+        ) -> *mut _cef_accessibility_handler_t,
+    >,
+    ///
+    /// Called to retrieve the root window rectangle in screen coordinates. Return
+    /// true (1) if the rectangle was provided. If this function returns false (0)
+    /// the rectangle from GetViewRect will be used.
+    ///
+    pub get_root_screen_rect: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_render_handler_t,
+            browser: *mut _cef_browser_t,
+            rect: *mut cef_rect_t,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Called to retrieve the view rectangle which is relative to screen
+    /// coordinates. This function must always provide a non-NULL rectangle.
+    ///
+    pub get_view_rect: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_render_handler_t,
+            browser: *mut _cef_browser_t,
+            rect: *mut cef_rect_t,
+        ),
+    >,
+    ///
+    /// Called to retrieve the translation from view coordinates to actual screen
+    /// coordinates. Return true (1) if the screen coordinates were provided.
+    ///
+    pub get_screen_point: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_render_handler_t,
+            browser: *mut _cef_browser_t,
+            viewX: ::std::os::raw::c_int,
+            viewY: ::std::os::raw::c_int,
+            screenX: *mut ::std::os::raw::c_int,
+            screenY: *mut ::std::os::raw::c_int,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Called to allow the client to fill in the CefScreenInfo object with
+    /// appropriate values. Return true (1) if the |screen_info| structure has been
+    /// modified.
+    ///
+    /// If the screen info rectangle is left NULL the rectangle from GetViewRect
+    /// will be used. If the rectangle is still NULL or invalid popups may not be
+    /// drawn correctly.
+    ///
+    pub get_screen_info: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_render_handler_t,
+            browser: *mut _cef_browser_t,
+            screen_info: *mut _cef_screen_info_t,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Called when the browser wants to show or hide the popup widget. The popup
+    /// should be shown if |show| is true (1) and hidden if |show| is false (0).
+    ///
+    pub on_popup_show: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_render_handler_t,
+            browser: *mut _cef_browser_t,
+            show: ::std::os::raw::c_int,
+        ),
+    >,
+    ///
+    /// Called when the browser wants to move or resize the popup widget. |rect|
+    /// contains the new location and size in view coordinates.
+    ///
+    pub on_popup_size: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_render_handler_t,
+            browser: *mut _cef_browser_t,
+            rect: *const cef_rect_t,
+        ),
+    >,
+    ///
+    /// Called when an element should be painted. Pixel values passed to this
+    /// function are scaled relative to view coordinates based on the value of
+    /// CefScreenInfo.device_scale_factor returned from GetScreenInfo. |type|
+    /// indicates whether the element is the view or the popup widget. |buffer|
+    /// contains the pixel data for the whole image. |dirtyRects| contains the set
+    /// of rectangles in pixel coordinates that need to be repainted. |buffer| will
+    /// be |width|*|height|*4 bytes in size and represents a BGRA image with an
+    /// upper-left origin. This function is only called when
+    /// cef_window_tInfo::shared_texture_enabled is set to false (0).
+    ///
+    pub on_paint: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_render_handler_t,
+            browser: *mut _cef_browser_t,
+            type_: cef_paint_element_type_t,
+            dirtyRectsCount: usize,
+            dirtyRects: *const cef_rect_t,
+            buffer: *const ::std::os::raw::c_void,
+            width: ::std::os::raw::c_int,
+            height: ::std::os::raw::c_int,
+        ),
+    >,
+    ///
+    /// Called when an element has been rendered to the shared texture handle.
+    /// |type| indicates whether the element is the view or the popup widget.
+    /// |dirtyRects| contains the set of rectangles in pixel coordinates that need
+    /// to be repainted. |shared_handle| is the handle for a D3D11 Texture2D that
+    /// can be accessed via ID3D11Device using the OpenSharedResource function.
+    /// This function is only called when cef_window_tInfo::shared_texture_enabled
+    /// is set to true (1), and is currently only supported on Windows.
+    ///
+    pub on_accelerated_paint: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_render_handler_t,
+            browser: *mut _cef_browser_t,
+            type_: cef_paint_element_type_t,
+            dirtyRectsCount: usize,
+            dirtyRects: *const cef_rect_t,
+            shared_handle: *mut ::std::os::raw::c_void,
+        ),
+    >,
+    ///
+    /// Called when the user starts dragging content in the web view. Contextual
+    /// information about the dragged content is supplied by |drag_data|. (|x|,
+    /// |y|) is the drag start location in screen coordinates. OS APIs that run a
+    /// system message loop may be used within the StartDragging call.
+    ///
+    /// Return false (0) to abort the drag operation. Don't call any of
+    /// cef_browser_host_t::DragSource*Ended* functions after returning false (0).
+    ///
+    /// Return true (1) to handle the drag operation. Call
+    /// cef_browser_host_t::DragSourceEndedAt and DragSourceSystemDragEnded either
+    /// synchronously or asynchronously to inform the web view that the drag
+    /// operation has ended.
+    ///
+    pub start_dragging: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_render_handler_t,
+            browser: *mut _cef_browser_t,
+            drag_data: *mut _cef_drag_data_t,
+            allowed_ops: cef_drag_operations_mask_t,
+            x: ::std::os::raw::c_int,
+            y: ::std::os::raw::c_int,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Called when the web view wants to update the mouse cursor during a drag &
+    /// drop operation. |operation| describes the allowed operation (none, move,
+    /// copy, link).
+    ///
+    pub update_drag_cursor: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_render_handler_t,
+            browser: *mut _cef_browser_t,
+            operation: cef_drag_operations_mask_t,
+        ),
+    >,
+    ///
+    /// Called when the scroll offset has changed.
+    ///
+    pub on_scroll_offset_changed: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_render_handler_t,
+            browser: *mut _cef_browser_t,
+            x: f64,
+            y: f64,
+        ),
+    >,
+    ///
+    /// Called when the IME composition range has changed. |selected_range| is the
+    /// range of characters that have been selected. |character_bounds| is the
+    /// bounds of each character in view coordinates.
+    ///
+    pub on_ime_composition_range_changed: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_render_handler_t,
+            browser: *mut _cef_browser_t,
+            selected_range: *const cef_range_t,
+            character_boundsCount: usize,
+            character_bounds: *const cef_rect_t,
+        ),
+    >,
+    ///
+    /// Called when text selection has changed for the specified |browser|.
+    /// |selected_text| is the currently selected text and |selected_range| is the
+    /// character range.
+    ///
+    pub on_text_selection_changed: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_render_handler_t,
+            browser: *mut _cef_browser_t,
+            selected_text: *const cef_string_t,
+            selected_range: *const cef_range_t,
+        ),
+    >,
+    ///
+    /// Called when an on-screen keyboard should be shown or hidden for the
+    /// specified |browser|. |input_mode| specifies what kind of keyboard should be
+    /// opened. If |input_mode| is CEF_TEXT_INPUT_MODE_NONE, any existing keyboard
+    /// for this browser should be hidden.
+    ///
+    pub on_virtual_keyboard_requested: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_render_handler_t,
+            browser: *mut _cef_browser_t,
+            input_mode: cef_text_input_mode_t,
+        ),
+    >,
+}
+///
+/// Callback structure used for asynchronous continuation of authentication
+/// requests.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_auth_callback_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Continue the authentication request.
+    ///
+    pub cont: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_auth_callback_t,
+            username: *const cef_string_t,
+            password: *const cef_string_t,
+        ),
+    >,
+    ///
+    /// Cancel the authentication request.
+    ///
+    pub cancel: ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_auth_callback_t)>,
+}
+///
+/// Structure used to represent a web response. The functions of this structure
+/// may be called on any thread.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_response_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Returns true (1) if this object is read-only.
+    ///
+    pub is_read_only: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_response_t) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Get the response error code. Returns ERR_NONE if there was no error.
+    ///
+    pub get_error:
+        ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_response_t) -> cef_errorcode_t>,
+    ///
+    /// Set the response error code. This can be used by custom scheme handlers to
+    /// return errors during initial request processing.
+    ///
+    pub set_error: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_response_t, error: cef_errorcode_t),
+    >,
+    ///
+    /// Get the response status code.
+    ///
+    pub get_status: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_response_t) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Set the response status code.
+    ///
+    pub set_status: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_response_t, status: ::std::os::raw::c_int),
+    >,
+    ///
+    /// Get the response status text.
+    ///
+    /// The resulting string must be freed by calling cef_string_userfree_free().
+    pub get_status_text: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_response_t) -> cef_string_userfree_t,
+    >,
+    ///
+    /// Set the response status text.
+    ///
+    pub set_status_text: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_response_t, statusText: *const cef_string_t),
+    >,
+    ///
+    /// Get the response mime type.
+    ///
+    /// The resulting string must be freed by calling cef_string_userfree_free().
+    pub get_mime_type: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_response_t) -> cef_string_userfree_t,
+    >,
+    ///
+    /// Set the response mime type.
+    ///
+    pub set_mime_type: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_response_t, mimeType: *const cef_string_t),
+    >,
+    ///
+    /// Get the response charset.
+    ///
+    /// The resulting string must be freed by calling cef_string_userfree_free().
+    pub get_charset: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_response_t) -> cef_string_userfree_t,
+    >,
+    ///
+    /// Set the response charset.
+    ///
+    pub set_charset: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_response_t, charset: *const cef_string_t),
+    >,
+    ///
+    /// Get the value for the specified response header field.
+    ///
+    /// The resulting string must be freed by calling cef_string_userfree_free().
+    pub get_header_by_name: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_response_t,
+            name: *const cef_string_t,
+        ) -> cef_string_userfree_t,
+    >,
+    ///
+    /// Set the header |name| to |value|. If |overwrite| is true (1) any existing
+    /// values will be replaced with the new value. If |overwrite| is false (0) any
+    /// existing values will not be overwritten.
+    ///
+    pub set_header_by_name: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_response_t,
+            name: *const cef_string_t,
+            value: *const cef_string_t,
+            overwrite: ::std::os::raw::c_int,
+        ),
+    >,
+    ///
+    /// Get all response header fields.
+    ///
+    pub get_header_map: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_response_t, headerMap: cef_string_multimap_t),
+    >,
+    ///
+    /// Set all response header fields.
+    ///
+    pub set_header_map: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_response_t, headerMap: cef_string_multimap_t),
+    >,
+    ///
+    /// Get the resolved URL after redirects or changed as a result of HSTS.
+    ///
+    /// The resulting string must be freed by calling cef_string_userfree_free().
+    pub get_url: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_response_t) -> cef_string_userfree_t,
+    >,
+    ///
+    /// Set the resolved URL after redirects or changed as a result of HSTS.
+    ///
+    pub set_url: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_response_t, url: *const cef_string_t),
+    >,
+}
+///
+/// Structure used to represent a web response. The functions of this structure
+/// may be called on any thread.
+///
+pub type cef_response_t = _cef_response_t;
+extern "C" {
+    ///
+    /// Create a new cef_response_t object.
+    ///
+    pub fn cef_response_create() -> *mut cef_response_t;
+}
+///
+/// Callback for asynchronous continuation of cef_resource_handler_t::skip().
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_resource_skip_callback_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Callback for asynchronous continuation of skip(). If |bytes_skipped| > 0
+    /// then either skip() will be called again until the requested number of bytes
+    /// have been skipped or the request will proceed. If |bytes_skipped| <= 0 the
+    /// request will fail with ERR_REQUEST_RANGE_NOT_SATISFIABLE.
+    ///
+    pub cont: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_resource_skip_callback_t, bytes_skipped: int64),
+    >,
+}
+///
+/// Callback for asynchronous continuation of cef_resource_handler_t::read().
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_resource_read_callback_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Callback for asynchronous continuation of read(). If |bytes_read| == 0 the
+    /// response will be considered complete. If |bytes_read| > 0 then read() will
+    /// be called again until the request is complete (based on either the result
+    /// or the expected content length). If |bytes_read| < 0 then the request will
+    /// fail and the |bytes_read| value will be treated as the error code.
+    ///
+    pub cont: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_resource_read_callback_t,
+            bytes_read: ::std::os::raw::c_int,
+        ),
+    >,
+}
+///
+/// Structure used to implement a custom request handler structure. The functions
+/// of this structure will be called on the IO thread unless otherwise indicated.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_resource_handler_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Open the response stream. To handle the request immediately set
+    /// |handle_request| to true (1) and return true (1). To decide at a later time
+    /// set |handle_request| to false (0), return true (1), and execute |callback|
+    /// to continue or cancel the request. To cancel the request immediately set
+    /// |handle_request| to true (1) and return false (0). This function will be
+    /// called in sequence but not from a dedicated thread. For backwards
+    /// compatibility set |handle_request| to false (0) and return false (0) and
+    /// the ProcessRequest function will be called.
+    ///
+    pub open: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_resource_handler_t,
+            request: *mut _cef_request_t,
+            handle_request: *mut ::std::os::raw::c_int,
+            callback: *mut _cef_callback_t,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Begin processing the request. To handle the request return true (1) and
+    /// call cef_callback_t::cont() once the response header information is
+    /// available (cef_callback_t::cont() can also be called from inside this
+    /// function if header information is available immediately). To cancel the
+    /// request return false (0).
+    ///
+    /// WARNING: This function is deprecated. Use Open instead.
+    ///
+    pub process_request: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_resource_handler_t,
+            request: *mut _cef_request_t,
+            callback: *mut _cef_callback_t,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Retrieve response header information. If the response length is not known
+    /// set |response_length| to -1 and read_response() will be called until it
+    /// returns false (0). If the response length is known set |response_length| to
+    /// a positive value and read_response() will be called until it returns false
+    /// (0) or the specified number of bytes have been read. Use the |response|
+    /// object to set the mime type, http status code and other optional header
+    /// values. To redirect the request to a new URL set |redirectUrl| to the new
+    /// URL. |redirectUrl| can be either a relative or fully qualified URL. It is
+    /// also possible to set |response| to a redirect http status code and pass the
+    /// new URL via a Location header. Likewise with |redirectUrl| it is valid to
+    /// set a relative or fully qualified URL as the Location header value. If an
+    /// error occured while setting up the request you can call set_error() on
+    /// |response| to indicate the error condition.
+    ///
+    pub get_response_headers: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_resource_handler_t,
+            response: *mut _cef_response_t,
+            response_length: *mut int64,
+            redirectUrl: *mut cef_string_t,
+        ),
+    >,
+    ///
+    /// Skip response data when requested by a Range header. Skip over and discard
+    /// |bytes_to_skip| bytes of response data. If data is available immediately
+    /// set |bytes_skipped| to the number of bytes skipped and return true (1). To
+    /// read the data at a later time set |bytes_skipped| to 0, return true (1) and
+    /// execute |callback| when the data is available. To indicate failure set
+    /// |bytes_skipped| to < 0 (e.g. -2 for ERR_FAILED) and return false (0). This
+    /// function will be called in sequence but not from a dedicated thread.
+    ///
+    pub skip: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_resource_handler_t,
+            bytes_to_skip: int64,
+            bytes_skipped: *mut int64,
+            callback: *mut _cef_resource_skip_callback_t,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Read response data. If data is available immediately copy up to
+    /// |bytes_to_read| bytes into |data_out|, set |bytes_read| to the number of
+    /// bytes copied, and return true (1). To read the data at a later time keep a
+    /// pointer to |data_out|, set |bytes_read| to 0, return true (1) and execute
+    /// |callback| when the data is available (|data_out| will remain valid until
+    /// the callback is executed). To indicate response completion set |bytes_read|
+    /// to 0 and return false (0). To indicate failure set |bytes_read| to < 0
+    /// (e.g. -2 for ERR_FAILED) and return false (0). This function will be called
+    /// in sequence but not from a dedicated thread. For backwards compatibility
+    /// set |bytes_read| to -1 and return false (0) and the ReadResponse function
+    /// will be called.
+    ///
+    pub read: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_resource_handler_t,
+            data_out: *mut ::std::os::raw::c_void,
+            bytes_to_read: ::std::os::raw::c_int,
+            bytes_read: *mut ::std::os::raw::c_int,
+            callback: *mut _cef_resource_read_callback_t,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Read response data. If data is available immediately copy up to
+    /// |bytes_to_read| bytes into |data_out|, set |bytes_read| to the number of
+    /// bytes copied, and return true (1). To read the data at a later time set
+    /// |bytes_read| to 0, return true (1) and call cef_callback_t::cont() when the
+    /// data is available. To indicate response completion return false (0).
+    ///
+    /// WARNING: This function is deprecated. Use Skip and Read instead.
+    ///
+    pub read_response: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_resource_handler_t,
+            data_out: *mut ::std::os::raw::c_void,
+            bytes_to_read: ::std::os::raw::c_int,
+            bytes_read: *mut ::std::os::raw::c_int,
+            callback: *mut _cef_callback_t,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Request processing has been canceled.
+    ///
+    pub cancel: ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_resource_handler_t)>,
+}
+///
+/// Implement this structure to filter resource response content. The functions
+/// of this structure will be called on the browser process IO thread.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_response_filter_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Initialize the response filter. Will only be called a single time. The
+    /// filter will not be installed if this function returns false (0).
+    ///
+    pub init_filter: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_response_filter_t) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Called to filter a chunk of data. Expected usage is as follows:
+    ///
+    ///  A. Read input data from |data_in| and set |data_in_read| to the number of
+    ///     bytes that were read up to a maximum of |data_in_size|. |data_in| will
+    ///     be NULL if |data_in_size| is zero.
+    ///  B. Write filtered output data to |data_out| and set |data_out_written| to
+    ///     the number of bytes that were written up to a maximum of
+    ///     |data_out_size|. If no output data was written then all data must be
+    ///     read from |data_in| (user must set |data_in_read| = |data_in_size|).
+    ///  C. Return RESPONSE_FILTER_DONE if all output data was written or
+    ///     RESPONSE_FILTER_NEED_MORE_DATA if output data is still pending.
+    ///
+    /// This function will be called repeatedly until the input buffer has been
+    /// fully read (user sets |data_in_read| = |data_in_size|) and there is no more
+    /// input data to filter (the resource response is complete). This function may
+    /// then be called an additional time with an NULL input buffer if the user
+    /// filled the output buffer (set |data_out_written| = |data_out_size|) and
+    /// returned RESPONSE_FILTER_NEED_MORE_DATA to indicate that output data is
+    /// still pending.
+    ///
+    /// Calls to this function will stop when one of the following conditions is
+    /// met:
+    ///
+    ///  A. There is no more input data to filter (the resource response is
+    ///     complete) and the user sets |data_out_written| = 0 or returns
+    ///     RESPONSE_FILTER_DONE to indicate that all data has been written, or;
+    ///  B. The user returns RESPONSE_FILTER_ERROR to indicate an error.
+    ///
+    /// Do not keep a reference to the buffers passed to this function.
+    ///
+    pub filter: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_response_filter_t,
+            data_in: *mut ::std::os::raw::c_void,
+            data_in_size: usize,
+            data_in_read: *mut usize,
+            data_out: *mut ::std::os::raw::c_void,
+            data_out_size: usize,
+            data_out_written: *mut usize,
+        ) -> cef_response_filter_status_t,
+    >,
+}
+///
+/// Implement this structure to handle events related to browser requests. The
+/// functions of this structure will be called on the IO thread unless otherwise
+/// indicated.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_resource_request_handler_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Called on the IO thread before a resource request is loaded. The |browser|
+    /// and |frame| values represent the source of the request, and may be NULL for
+    /// requests originating from service workers or cef_urlrequest_t. To
+    /// optionally filter cookies for the request return a
+    /// cef_cookie_access_filter_t object. The |request| object cannot not be
+    /// modified in this callback.
+    ///
+    pub get_cookie_access_filter: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_resource_request_handler_t,
+            browser: *mut _cef_browser_t,
+            frame: *mut _cef_frame_t,
+            request: *mut _cef_request_t,
+        ) -> *mut _cef_cookie_access_filter_t,
+    >,
+    ///
+    /// Called on the IO thread before a resource request is loaded. The |browser|
+    /// and |frame| values represent the source of the request, and may be NULL for
+    /// requests originating from service workers or cef_urlrequest_t. To redirect
+    /// or change the resource load optionally modify |request|. Modification of
+    /// the request URL will be treated as a redirect. Return RV_CONTINUE to
+    /// continue the request immediately. Return RV_CONTINUE_ASYNC and call
+    /// cef_callback_t functions at a later time to continue or cancel the request
+    /// asynchronously. Return RV_CANCEL to cancel the request immediately.
+    ///
+    ///
+    pub on_before_resource_load: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_resource_request_handler_t,
+            browser: *mut _cef_browser_t,
+            frame: *mut _cef_frame_t,
+            request: *mut _cef_request_t,
+            callback: *mut _cef_callback_t,
+        ) -> cef_return_value_t,
+    >,
+    ///
+    /// Called on the IO thread before a resource is loaded. The |browser| and
+    /// |frame| values represent the source of the request, and may be NULL for
+    /// requests originating from service workers or cef_urlrequest_t. To allow the
+    /// resource to load using the default network loader return NULL. To specify a
+    /// handler for the resource return a cef_resource_handler_t object. The
+    /// |request| object cannot not be modified in this callback.
+    ///
+    pub get_resource_handler: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_resource_request_handler_t,
+            browser: *mut _cef_browser_t,
+            frame: *mut _cef_frame_t,
+            request: *mut _cef_request_t,
+        ) -> *mut _cef_resource_handler_t,
+    >,
+    ///
+    /// Called on the IO thread when a resource load is redirected. The |browser|
+    /// and |frame| values represent the source of the request, and may be NULL for
+    /// requests originating from service workers or cef_urlrequest_t. The
+    /// |request| parameter will contain the old URL and other request-related
+    /// information. The |response| parameter will contain the response that
+    /// resulted in the redirect. The |new_url| parameter will contain the new URL
+    /// and can be changed if desired. The |request| and |response| objects cannot
+    /// be modified in this callback.
+    ///
+    pub on_resource_redirect: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_resource_request_handler_t,
+            browser: *mut _cef_browser_t,
+            frame: *mut _cef_frame_t,
+            request: *mut _cef_request_t,
+            response: *mut _cef_response_t,
+            new_url: *mut cef_string_t,
+        ),
+    >,
+    ///
+    /// Called on the IO thread when a resource response is received. The |browser|
+    /// and |frame| values represent the source of the request, and may be NULL for
+    /// requests originating from service workers or cef_urlrequest_t. To allow the
+    /// resource load to proceed without modification return false (0). To redirect
+    /// or retry the resource load optionally modify |request| and return true (1).
+    /// Modification of the request URL will be treated as a redirect. Requests
+    /// handled using the default network loader cannot be redirected in this
+    /// callback. The |response| object cannot be modified in this callback.
+    ///
+    /// WARNING: Redirecting using this function is deprecated. Use
+    /// OnBeforeResourceLoad or GetResourceHandler to perform redirects.
+    ///
+    pub on_resource_response: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_resource_request_handler_t,
+            browser: *mut _cef_browser_t,
+            frame: *mut _cef_frame_t,
+            request: *mut _cef_request_t,
+            response: *mut _cef_response_t,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Called on the IO thread to optionally filter resource response content. The
+    /// |browser| and |frame| values represent the source of the request, and may
+    /// be NULL for requests originating from service workers or cef_urlrequest_t.
+    /// |request| and |response| represent the request and response respectively
+    /// and cannot be modified in this callback.
+    ///
+    pub get_resource_response_filter: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_resource_request_handler_t,
+            browser: *mut _cef_browser_t,
+            frame: *mut _cef_frame_t,
+            request: *mut _cef_request_t,
+            response: *mut _cef_response_t,
+        ) -> *mut _cef_response_filter_t,
+    >,
+    ///
+    /// Called on the IO thread when a resource load has completed. The |browser|
+    /// and |frame| values represent the source of the request, and may be NULL for
+    /// requests originating from service workers or cef_urlrequest_t. |request|
+    /// and |response| represent the request and response respectively and cannot
+    /// be modified in this callback. |status| indicates the load completion
+    /// status. |received_content_length| is the number of response bytes actually
+    /// read. This function will be called for all requests, including requests
+    /// that are aborted due to CEF shutdown or destruction of the associated
+    /// browser. In cases where the associated browser is destroyed this callback
+    /// may arrive after the cef_life_span_handler_t::OnBeforeClose callback for
+    /// that browser. The cef_frame_t::IsValid function can be used to test for
+    /// this situation, and care should be taken not to call |browser| or |frame|
+    /// functions that modify state (like LoadURL, SendProcessMessage, etc.) if the
+    /// frame is invalid.
+    ///
+    pub on_resource_load_complete: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_resource_request_handler_t,
+            browser: *mut _cef_browser_t,
+            frame: *mut _cef_frame_t,
+            request: *mut _cef_request_t,
+            response: *mut _cef_response_t,
+            status: cef_urlrequest_status_t,
+            received_content_length: int64,
+        ),
+    >,
+    ///
+    /// Called on the IO thread to handle requests for URLs with an unknown
+    /// protocol component. The |browser| and |frame| values represent the source
+    /// of the request, and may be NULL for requests originating from service
+    /// workers or cef_urlrequest_t. |request| cannot be modified in this callback.
+    /// Set |allow_os_execution| to true (1) to attempt execution via the
+    /// registered OS protocol handler, if any. SECURITY WARNING: YOU SHOULD USE
+    /// THIS METHOD TO ENFORCE RESTRICTIONS BASED ON SCHEME, HOST OR OTHER URL
+    /// ANALYSIS BEFORE ALLOWING OS EXECUTION.
+    ///
+    pub on_protocol_execution: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_resource_request_handler_t,
+            browser: *mut _cef_browser_t,
+            frame: *mut _cef_frame_t,
+            request: *mut _cef_request_t,
+            allow_os_execution: *mut ::std::os::raw::c_int,
+        ),
+    >,
+}
+///
+/// Implement this structure to filter cookies that may be sent or received from
+/// resource requests. The functions of this structure will be called on the IO
+/// thread unless otherwise indicated.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_cookie_access_filter_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Called on the IO thread before a resource request is sent. The |browser|
+    /// and |frame| values represent the source of the request, and may be NULL for
+    /// requests originating from service workers or cef_urlrequest_t. |request|
+    /// cannot be modified in this callback. Return true (1) if the specified
+    /// cookie can be sent with the request or false (0) otherwise.
+    ///
+    pub can_send_cookie: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_cookie_access_filter_t,
+            browser: *mut _cef_browser_t,
+            frame: *mut _cef_frame_t,
+            request: *mut _cef_request_t,
+            cookie: *const _cef_cookie_t,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Called on the IO thread after a resource response is received. The
+    /// |browser| and |frame| values represent the source of the request, and may
+    /// be NULL for requests originating from service workers or cef_urlrequest_t.
+    /// |request| cannot be modified in this callback. Return true (1) if the
+    /// specified cookie returned with the response can be saved or false (0)
+    /// otherwise.
+    ///
+    pub can_save_cookie: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_cookie_access_filter_t,
+            browser: *mut _cef_browser_t,
+            frame: *mut _cef_frame_t,
+            request: *mut _cef_request_t,
+            response: *mut _cef_response_t,
+            cookie: *const _cef_cookie_t,
+        ) -> ::std::os::raw::c_int,
+    >,
+}
+///
+/// Structure representing SSL information.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_sslinfo_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Returns a bitmask containing any and all problems verifying the server
+    /// certificate.
+    ///
+    pub get_cert_status: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_sslinfo_t) -> cef_cert_status_t,
+    >,
+    ///
+    /// Returns the X.509 certificate.
+    ///
+    pub get_x509certificate: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_sslinfo_t) -> *mut _cef_x509certificate_t,
+    >,
+}
+extern "C" {
+    ///
+    /// Returns true (1) if the certificate status represents an error.
+    ///
+    pub fn cef_is_cert_status_error(status: cef_cert_status_t) -> ::std::os::raw::c_int;
+}
+///
+/// Callback structure used to select a client certificate for authentication.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_select_client_certificate_callback_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Chooses the specified certificate for client certificate authentication.
+    /// NULL value means that no client certificate should be used.
+    ///
+    pub select: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_select_client_certificate_callback_t,
+            cert: *mut _cef_x509certificate_t,
+        ),
+    >,
+}
+///
+/// Implement this structure to handle events related to browser requests. The
+/// functions of this structure will be called on the thread indicated.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_request_handler_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Called on the UI thread before browser navigation. Return true (1) to
+    /// cancel the navigation or false (0) to allow the navigation to proceed. The
+    /// |request| object cannot be modified in this callback.
+    /// cef_load_handler_t::OnLoadingStateChange will be called twice in all cases.
+    /// If the navigation is allowed cef_load_handler_t::OnLoadStart and
+    /// cef_load_handler_t::OnLoadEnd will be called. If the navigation is canceled
+    /// cef_load_handler_t::OnLoadError will be called with an |errorCode| value of
+    /// ERR_ABORTED. The |user_gesture| value will be true (1) if the browser
+    /// navigated via explicit user gesture (e.g. clicking a link) or false (0) if
+    /// it navigated automatically (e.g. via the DomContentLoaded event).
+    ///
+    pub on_before_browse: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_request_handler_t,
+            browser: *mut _cef_browser_t,
+            frame: *mut _cef_frame_t,
+            request: *mut _cef_request_t,
+            user_gesture: ::std::os::raw::c_int,
+            is_redirect: ::std::os::raw::c_int,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Called on the UI thread before OnBeforeBrowse in certain limited cases
+    /// where navigating a new or different browser might be desirable. This
+    /// includes user-initiated navigation that might open in a special way (e.g.
+    /// links clicked via middle-click or ctrl + left-click) and certain types of
+    /// cross-origin navigation initiated from the renderer process (e.g.
+    /// navigating the top-level frame to/from a file URL). The |browser| and
+    /// |frame| values represent the source of the navigation. The
+    /// |target_disposition| value indicates where the user intended to navigate
+    /// the browser based on standard Chromium behaviors (e.g. current tab, new
+    /// tab, etc). The |user_gesture| value will be true (1) if the browser
+    /// navigated via explicit user gesture (e.g. clicking a link) or false (0) if
+    /// it navigated automatically (e.g. via the DomContentLoaded event). Return
+    /// true (1) to cancel the navigation or false (0) to allow the navigation to
+    /// proceed in the source browser's top-level frame.
+    ///
+    pub on_open_urlfrom_tab: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_request_handler_t,
+            browser: *mut _cef_browser_t,
+            frame: *mut _cef_frame_t,
+            target_url: *const cef_string_t,
+            target_disposition: cef_window_open_disposition_t,
+            user_gesture: ::std::os::raw::c_int,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Called on the browser process IO thread before a resource request is
+    /// initiated. The |browser| and |frame| values represent the source of the
+    /// request. |request| represents the request contents and cannot be modified
+    /// in this callback. |is_navigation| will be true (1) if the resource request
+    /// is a navigation. |is_download| will be true (1) if the resource request is
+    /// a download. |request_initiator| is the origin (scheme + domain) of the page
+    /// that initiated the request. Set |disable_default_handling| to true (1) to
+    /// disable default handling of the request, in which case it will need to be
+    /// handled via cef_resource_request_handler_t::GetResourceHandler or it will
+    /// be canceled. To allow the resource load to proceed with default handling
+    /// return NULL. To specify a handler for the resource return a
+    /// cef_resource_request_handler_t object. If this callback returns NULL the
+    /// same function will be called on the associated
+    /// cef_request_context_handler_t, if any.
+    ///
+    pub get_resource_request_handler: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_request_handler_t,
+            browser: *mut _cef_browser_t,
+            frame: *mut _cef_frame_t,
+            request: *mut _cef_request_t,
+            is_navigation: ::std::os::raw::c_int,
+            is_download: ::std::os::raw::c_int,
+            request_initiator: *const cef_string_t,
+            disable_default_handling: *mut ::std::os::raw::c_int,
+        ) -> *mut _cef_resource_request_handler_t,
+    >,
+    ///
+    /// Called on the IO thread when the browser needs credentials from the user.
+    /// |origin_url| is the origin making this authentication request. |isProxy|
+    /// indicates whether the host is a proxy server. |host| contains the hostname
+    /// and |port| contains the port number. |realm| is the realm of the challenge
+    /// and may be NULL. |scheme| is the authentication scheme used, such as
+    /// "basic" or "digest", and will be NULL if the source of the request is an
+    /// FTP server. Return true (1) to continue the request and call
+    /// cef_auth_callback_t::cont() either in this function or at a later time when
+    /// the authentication information is available. Return false (0) to cancel the
+    /// request immediately.
+    ///
+    pub get_auth_credentials: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_request_handler_t,
+            browser: *mut _cef_browser_t,
+            origin_url: *const cef_string_t,
+            isProxy: ::std::os::raw::c_int,
+            host: *const cef_string_t,
+            port: ::std::os::raw::c_int,
+            realm: *const cef_string_t,
+            scheme: *const cef_string_t,
+            callback: *mut _cef_auth_callback_t,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Called on the IO thread when JavaScript requests a specific storage quota
+    /// size via the webkitStorageInfo.requestQuota function. |origin_url| is the
+    /// origin of the page making the request. |new_size| is the requested quota
+    /// size in bytes. Return true (1) to continue the request and call
+    /// cef_callback_t functions either in this function or at a later time to
+    /// grant or deny the request. Return false (0) to cancel the request
+    /// immediately.
+    ///
+    pub on_quota_request: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_request_handler_t,
+            browser: *mut _cef_browser_t,
+            origin_url: *const cef_string_t,
+            new_size: int64,
+            callback: *mut _cef_callback_t,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Called on the UI thread to handle requests for URLs with an invalid SSL
+    /// certificate. Return true (1) and call cef_callback_t functions either in
+    /// this function or at a later time to continue or cancel the request. Return
+    /// false (0) to cancel the request immediately. If
+    /// CefSettings.ignore_certificate_errors is set all invalid certificates will
+    /// be accepted without calling this function.
+    ///
+    pub on_certificate_error: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_request_handler_t,
+            browser: *mut _cef_browser_t,
+            cert_error: cef_errorcode_t,
+            request_url: *const cef_string_t,
+            ssl_info: *mut _cef_sslinfo_t,
+            callback: *mut _cef_callback_t,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Called on the UI thread when a client certificate is being requested for
+    /// authentication. Return false (0) to use the default behavior and
+    /// automatically select the first certificate available. Return true (1) and
+    /// call cef_select_client_certificate_callback_t::Select either in this
+    /// function or at a later time to select a certificate. Do not call Select or
+    /// call it with NULL to continue without using any certificate. |isProxy|
+    /// indicates whether the host is an HTTPS proxy or the origin server. |host|
+    /// and |port| contains the hostname and port of the SSL server. |certificates|
+    /// is the list of certificates to choose from; this list has already been
+    /// pruned by Chromium so that it only contains certificates from issuers that
+    /// the server trusts.
+    ///
+    pub on_select_client_certificate: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_request_handler_t,
+            browser: *mut _cef_browser_t,
+            isProxy: ::std::os::raw::c_int,
+            host: *const cef_string_t,
+            port: ::std::os::raw::c_int,
+            certificatesCount: usize,
+            certificates: *const *mut _cef_x509certificate_t,
+            callback: *mut _cef_select_client_certificate_callback_t,
+        ) -> ::std::os::raw::c_int,
+    >,
+    ///
+    /// Called on the browser process UI thread when the render view associated
+    /// with |browser| is ready to receive/handle IPC messages in the render
+    /// process.
+    ///
+    pub on_render_view_ready: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_request_handler_t, browser: *mut _cef_browser_t),
+    >,
+    ///
+    /// Called on the browser process UI thread when the render process terminates
+    /// unexpectedly. |status| indicates how the process terminated.
+    ///
+    pub on_render_process_terminated: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_request_handler_t,
+            browser: *mut _cef_browser_t,
+            status: cef_termination_status_t,
+        ),
+    >,
+    ///
+    /// Called on the browser process UI thread when the window.document object of
+    /// the main frame has been created.
+    ///
+    pub on_document_available_in_main_frame: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_request_handler_t, browser: *mut _cef_browser_t),
+    >,
+}
+///
+/// Implement this structure to provide handler implementations.
+///
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _cef_client_t {
+    ///
+    /// Base structure.
+    ///
+    pub base: cef_base_ref_counted_t,
+    ///
+    /// Return the handler for audio rendering events.
+    ///
+    pub get_audio_handler: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_client_t) -> *mut _cef_audio_handler_t,
+    >,
+    ///
+    /// Return the handler for context menus. If no handler is provided the default
+    /// implementation will be used.
+    ///
+    pub get_context_menu_handler: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_client_t) -> *mut _cef_context_menu_handler_t,
+    >,
+    ///
+    /// Return the handler for dialogs. If no handler is provided the default
+    /// implementation will be used.
+    ///
+    pub get_dialog_handler: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_client_t) -> *mut _cef_dialog_handler_t,
+    >,
+    ///
+    /// Return the handler for browser display state events.
+    ///
+    pub get_display_handler: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_client_t) -> *mut _cef_display_handler_t,
+    >,
+    ///
+    /// Return the handler for download events. If no handler is returned downloads
+    /// will not be allowed.
+    ///
+    pub get_download_handler: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_client_t) -> *mut _cef_download_handler_t,
+    >,
+    ///
+    /// Return the handler for drag events.
+    ///
+    pub get_drag_handler: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_client_t) -> *mut _cef_drag_handler_t,
+    >,
+    ///
+    /// Return the handler for find result events.
+    ///
+    pub get_find_handler: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_client_t) -> *mut _cef_find_handler_t,
+    >,
+    ///
+    /// Return the handler for focus events.
+    ///
+    pub get_focus_handler: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_client_t) -> *mut _cef_focus_handler_t,
+    >,
+    ///
+    /// Return the handler for events related to cef_frame_t lifespan. This
+    /// function will be called once during cef_browser_t creation and the result
+    /// will be cached for performance reasons.
+    ///
+    pub get_frame_handler: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_client_t) -> *mut _cef_frame_handler_t,
+    >,
+    ///
+    /// Return the handler for JavaScript dialogs. If no handler is provided the
+    /// default implementation will be used.
+    ///
+    pub get_jsdialog_handler: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_client_t) -> *mut _cef_jsdialog_handler_t,
+    >,
+    ///
+    /// Return the handler for keyboard events.
+    ///
+    pub get_keyboard_handler: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_client_t) -> *mut _cef_keyboard_handler_t,
+    >,
+    ///
+    /// Return the handler for browser life span events.
+    ///
+    pub get_life_span_handler: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_client_t) -> *mut _cef_life_span_handler_t,
+    >,
+    ///
+    /// Return the handler for browser load status events.
+    ///
+    pub get_load_handler: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_client_t) -> *mut _cef_load_handler_t,
+    >,
+    ///
+    /// Return the handler for printing on Linux. If a print handler is not
+    /// provided then printing will not be supported on the Linux platform.
+    ///
+    pub get_print_handler: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_client_t) -> *mut _cef_print_handler_t,
+    >,
+    ///
+    /// Return the handler for off-screen rendering events.
+    ///
+    pub get_render_handler: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_client_t) -> *mut _cef_render_handler_t,
+    >,
+    ///
+    /// Return the handler for browser request events.
+    ///
+    pub get_request_handler: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_client_t) -> *mut _cef_request_handler_t,
+    >,
+    ///
+    /// Called when a new message is received from a different process. Return true
+    /// (1) if the message was handled or false (0) otherwise.  It is safe to keep
+    /// a reference to |message| outside of this callback.
+    ///
+    pub on_process_message_received: ::std::option::Option<
+        unsafe extern "C" fn(
+            self_: *mut _cef_client_t,
+            browser: *mut _cef_browser_t,
+            frame: *mut _cef_frame_t,
+            source_process: cef_process_id_t,
+            message: *mut _cef_process_message_t,
+        ) -> ::std::os::raw::c_int,
     >,
 }
 ///
@@ -8679,8 +11794,9 @@ pub struct _cef_context_menu_params_t {
 /// optionally have a value specified using the '=' delimiter (e.g.
 /// "-switch=value"). An argument of "--" will terminate switch parsing with all
 /// subsequent tokens, regardless of prefix, being interpreted as non-switch
-/// arguments. Switch names are considered case-insensitive. This structure can
-/// be used before cef_initialize() is called.
+/// arguments. Switch names should be lowercase ASCII and will be converted to
+/// such if necessary. Switch values will retain the original case and UTF8
+/// encoding. This structure can be used before cef_initialize() is called.
 ///
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -8844,8 +11960,9 @@ pub struct _cef_command_line_t {
 /// optionally have a value specified using the '=' delimiter (e.g.
 /// "-switch=value"). An argument of "--" will terminate switch parsing with all
 /// subsequent tokens, regardless of prefix, being interpreted as non-switch
-/// arguments. Switch names are considered case-insensitive. This structure can
-/// be used before cef_initialize() is called.
+/// arguments. Switch names should be lowercase ASCII and will be converted to
+/// such if necessary. Switch values will retain the original case and UTF8
+/// encoding. This structure can be used before cef_initialize() is called.
 ///
 pub type cef_command_line_t = _cef_command_line_t;
 extern "C" {
@@ -8882,37 +11999,15 @@ pub struct _cef_browser_process_handler_t {
     ///
     /// Called before a child process is launched. Will be called on the browser
     /// process UI thread when launching a render process and on the browser
-    /// process IO thread when launching a GPU or plugin process. Provides an
-    /// opportunity to modify the child process command line. Do not keep a
-    /// reference to |command_line| outside of this function.
+    /// process IO thread when launching a GPU process. Provides an opportunity to
+    /// modify the child process command line. Do not keep a reference to
+    /// |command_line| outside of this function.
     ///
     pub on_before_child_process_launch: ::std::option::Option<
         unsafe extern "C" fn(
             self_: *mut _cef_browser_process_handler_t,
             command_line: *mut _cef_command_line_t,
         ),
-    >,
-    ///
-    /// Called on the browser process IO thread after the main thread has been
-    /// created for a new render process. Provides an opportunity to specify extra
-    /// information that will be passed to
-    /// cef_render_process_handler_t::on_render_thread_created() in the render
-    /// process. Do not keep a reference to |extra_info| outside of this function.
-    ///
-    pub on_render_process_thread_created: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_browser_process_handler_t,
-            extra_info: *mut _cef_list_value_t,
-        ),
-    >,
-    ///
-    /// Return the handler for printing on Linux. If a print handler is not
-    /// provided then printing will not be supported on the Linux platform.
-    ///
-    pub get_print_handler: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_browser_process_handler_t,
-        ) -> *mut _cef_print_handler_t,
     >,
     ///
     /// Called from any thread when work has been scheduled for the browser process
@@ -8930,89 +12025,15 @@ pub struct _cef_browser_process_handler_t {
     pub on_schedule_message_pump_work: ::std::option::Option<
         unsafe extern "C" fn(self_: *mut _cef_browser_process_handler_t, delay_ms: int64),
     >,
-}
-///
-/// Implement this structure to handle events related to browser load status. The
-/// functions of this structure will be called on the browser process UI thread
-/// or render process main thread (TID_RENDERER).
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_load_handler_t {
     ///
-    /// Base structure.
+    /// Return the default client for use with a newly created browser window. If
+    /// null is returned the browser will be unmanaged (no callbacks will be
+    /// executed for that browser) and application shutdown will be blocked until
+    /// the browser window is closed manually. This function is currently only used
+    /// with the chrome runtime.
     ///
-    pub base: cef_base_ref_counted_t,
-    ///
-    /// Called when the loading state has changed. This callback will be executed
-    /// twice -- once when loading is initiated either programmatically or by user
-    /// action, and once when loading is terminated due to completion, cancellation
-    /// of failure. It will be called before any calls to OnLoadStart and after all
-    /// calls to OnLoadError and/or OnLoadEnd.
-    ///
-    pub on_loading_state_change: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_load_handler_t,
-            browser: *mut _cef_browser_t,
-            isLoading: ::std::os::raw::c_int,
-            canGoBack: ::std::os::raw::c_int,
-            canGoForward: ::std::os::raw::c_int,
-        ),
-    >,
-    ///
-    /// Called after a navigation has been committed and before the browser begins
-    /// loading contents in the frame. The |frame| value will never be NULL -- call
-    /// the is_main() function to check if this frame is the main frame.
-    /// |transition_type| provides information about the source of the navigation
-    /// and an accurate value is only available in the browser process. Multiple
-    /// frames may be loading at the same time. Sub-frames may start or continue
-    /// loading after the main frame load has ended. This function will not be
-    /// called for same page navigations (fragments, history state, etc.) or for
-    /// navigations that fail or are canceled before commit. For notification of
-    /// overall browser load status use OnLoadingStateChange instead.
-    ///
-    pub on_load_start: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_load_handler_t,
-            browser: *mut _cef_browser_t,
-            frame: *mut _cef_frame_t,
-            transition_type: cef_transition_type_t,
-        ),
-    >,
-    ///
-    /// Called when the browser is done loading a frame. The |frame| value will
-    /// never be NULL -- call the is_main() function to check if this frame is the
-    /// main frame. Multiple frames may be loading at the same time. Sub-frames may
-    /// start or continue loading after the main frame load has ended. This
-    /// function will not be called for same page navigations (fragments, history
-    /// state, etc.) or for navigations that fail or are canceled before commit.
-    /// For notification of overall browser load status use OnLoadingStateChange
-    /// instead.
-    ///
-    pub on_load_end: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_load_handler_t,
-            browser: *mut _cef_browser_t,
-            frame: *mut _cef_frame_t,
-            httpStatusCode: ::std::os::raw::c_int,
-        ),
-    >,
-    ///
-    /// Called when a navigation fails or is canceled. This function may be called
-    /// by itself if before commit or in combination with OnLoadStart/OnLoadEnd if
-    /// after commit. |errorCode| is the error code number, |errorText| is the
-    /// error text and |failedUrl| is the URL that failed to load. See
-    /// net\base\net_error_list.h for complete descriptions of the error codes.
-    ///
-    pub on_load_error: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_load_handler_t,
-            browser: *mut _cef_browser_t,
-            frame: *mut _cef_frame_t,
-            errorCode: cef_errorcode_t,
-            errorText: *const cef_string_t,
-            failedUrl: *const cef_string_t,
-        ),
+    pub get_default_client: ::std::option::Option<
+        unsafe extern "C" fn(self_: *mut _cef_browser_process_handler_t) -> *mut _cef_client_t,
     >,
 }
 ///
@@ -9136,14 +12157,14 @@ extern "C" {
 extern "C" {
     ///
     /// Returns true (1) if called on the specified thread. Equivalent to using
-    /// cef_task_tRunner::GetForThread(threadId)->belongs_to_current_thread().
+    /// cef_task_runner_t::GetForThread(threadId)->belongs_to_current_thread().
     ///
     pub fn cef_currently_on(threadId: cef_thread_id_t) -> ::std::os::raw::c_int;
 }
 extern "C" {
     ///
     /// Post a task for execution on the specified thread. Equivalent to using
-    /// cef_task_tRunner::GetForThread(threadId)->PostTask(task).
+    /// cef_task_runner_t::GetForThread(threadId)->PostTask(task).
     ///
     pub fn cef_post_task(threadId: cef_thread_id_t, task: *mut cef_task_t)
         -> ::std::os::raw::c_int;
@@ -9151,7 +12172,7 @@ extern "C" {
 extern "C" {
     ///
     /// Post a task for delayed execution on the specified thread. Equivalent to
-    /// using cef_task_tRunner::GetForThread(threadId)->PostDelayedTask(task,
+    /// using cef_task_runner_t::GetForThread(threadId)->PostDelayedTask(task,
     /// delay_ms).
     ///
     pub fn cef_post_delayed_task(
@@ -10288,18 +13309,6 @@ pub struct _cef_render_process_handler_t {
     ///
     pub base: cef_base_ref_counted_t,
     ///
-    /// Called after the render process main thread has been created. |extra_info|
-    /// is a read-only value originating from
-    /// cef_browser_process_handler_t::on_render_process_thread_created(). Do not
-    /// keep a reference to |extra_info| outside of this function.
-    ///
-    pub on_render_thread_created: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_render_process_handler_t,
-            extra_info: *mut _cef_list_value_t,
-        ),
-    >,
-    ///
     /// Called after WebKit has been initialized.
     ///
     pub on_web_kit_initialized:
@@ -10307,12 +13316,17 @@ pub struct _cef_render_process_handler_t {
     ///
     /// Called after a browser has been created. When browsing cross-origin a new
     /// browser will be created before the old browser with the same identifier is
-    /// destroyed.
+    /// destroyed. |extra_info| is an optional read-only value originating from
+    /// cef_browser_host_t::cef_browser_host_create_browser(),
+    /// cef_browser_host_t::cef_browser_host_create_browser_sync(),
+    /// cef_life_span_handler_t::on_before_popup() or
+    /// cef_browser_view_t::cef_browser_view_create().
     ///
     pub on_browser_created: ::std::option::Option<
         unsafe extern "C" fn(
             self_: *mut _cef_render_process_handler_t,
             browser: *mut _cef_browser_t,
+            extra_info: *mut _cef_dictionary_value_t,
         ),
     >,
     ///
@@ -10391,13 +13405,14 @@ pub struct _cef_render_process_handler_t {
     >,
     ///
     /// Called when a new message is received from a different process. Return true
-    /// (1) if the message was handled or false (0) otherwise. Do not keep a
-    /// reference to or attempt to access the message outside of this callback.
+    /// (1) if the message was handled or false (0) otherwise. It is safe to keep a
+    /// reference to |message| outside of this callback.
     ///
     pub on_process_message_received: ::std::option::Option<
         unsafe extern "C" fn(
             self_: *mut _cef_render_process_handler_t,
             browser: *mut _cef_browser_t,
+            frame: *mut _cef_frame_t,
             source_process: cef_process_id_t,
             message: *mut _cef_process_message_t,
         ) -> ::std::os::raw::c_int,
@@ -10463,206 +13478,6 @@ pub struct _cef_resource_bundle_handler_t {
     >,
 }
 ///
-/// Structure used to represent a web response. The functions of this structure
-/// may be called on any thread.
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_response_t {
-    ///
-    /// Base structure.
-    ///
-    pub base: cef_base_ref_counted_t,
-    ///
-    /// Returns true (1) if this object is read-only.
-    ///
-    pub is_read_only: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_response_t) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Get the response error code. Returns ERR_NONE if there was no error.
-    ///
-    pub get_error:
-        ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_response_t) -> cef_errorcode_t>,
-    ///
-    /// Set the response error code. This can be used by custom scheme handlers to
-    /// return errors during initial request processing.
-    ///
-    pub set_error: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_response_t, error: cef_errorcode_t),
-    >,
-    ///
-    /// Get the response status code.
-    ///
-    pub get_status: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_response_t) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Set the response status code.
-    ///
-    pub set_status: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_response_t, status: ::std::os::raw::c_int),
-    >,
-    ///
-    /// Get the response status text.
-    ///
-    /// The resulting string must be freed by calling cef_string_userfree_free().
-    pub get_status_text: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_response_t) -> cef_string_userfree_t,
-    >,
-    ///
-    /// Set the response status text.
-    ///
-    pub set_status_text: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_response_t, statusText: *const cef_string_t),
-    >,
-    ///
-    /// Get the response mime type.
-    ///
-    /// The resulting string must be freed by calling cef_string_userfree_free().
-    pub get_mime_type: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_response_t) -> cef_string_userfree_t,
-    >,
-    ///
-    /// Set the response mime type.
-    ///
-    pub set_mime_type: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_response_t, mimeType: *const cef_string_t),
-    >,
-    ///
-    /// Get the value for the specified response header field.
-    ///
-    /// The resulting string must be freed by calling cef_string_userfree_free().
-    pub get_header: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_response_t,
-            name: *const cef_string_t,
-        ) -> cef_string_userfree_t,
-    >,
-    ///
-    /// Get all response header fields.
-    ///
-    pub get_header_map: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_response_t, headerMap: cef_string_multimap_t),
-    >,
-    ///
-    /// Set all response header fields.
-    ///
-    pub set_header_map: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_response_t, headerMap: cef_string_multimap_t),
-    >,
-    ///
-    /// Get the resolved URL after redirects or changed as a result of HSTS.
-    ///
-    /// The resulting string must be freed by calling cef_string_userfree_free().
-    pub get_url: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_response_t) -> cef_string_userfree_t,
-    >,
-    ///
-    /// Set the resolved URL after redirects or changed as a result of HSTS.
-    ///
-    pub set_url: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_response_t, url: *const cef_string_t),
-    >,
-}
-///
-/// Structure used to represent a web response. The functions of this structure
-/// may be called on any thread.
-///
-pub type cef_response_t = _cef_response_t;
-extern "C" {
-    ///
-    /// Create a new cef_response_t object.
-    ///
-    pub fn cef_response_create() -> *mut cef_response_t;
-}
-///
-/// Structure used to implement a custom request handler structure. The functions
-/// of this structure will always be called on the IO thread.
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_resource_handler_t {
-    ///
-    /// Base structure.
-    ///
-    pub base: cef_base_ref_counted_t,
-    ///
-    /// Begin processing the request. To handle the request return true (1) and
-    /// call cef_callback_t::cont() once the response header information is
-    /// available (cef_callback_t::cont() can also be called from inside this
-    /// function if header information is available immediately). To cancel the
-    /// request return false (0).
-    ///
-    pub process_request: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_resource_handler_t,
-            request: *mut _cef_request_t,
-            callback: *mut _cef_callback_t,
-        ) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Retrieve response header information. If the response length is not known
-    /// set |response_length| to -1 and read_response() will be called until it
-    /// returns false (0). If the response length is known set |response_length| to
-    /// a positive value and read_response() will be called until it returns false
-    /// (0) or the specified number of bytes have been read. Use the |response|
-    /// object to set the mime type, http status code and other optional header
-    /// values. To redirect the request to a new URL set |redirectUrl| to the new
-    /// URL. If an error occured while setting up the request you can call
-    /// set_error() on |response| to indicate the error condition.
-    ///
-    pub get_response_headers: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_resource_handler_t,
-            response: *mut _cef_response_t,
-            response_length: *mut int64,
-            redirectUrl: *mut cef_string_t,
-        ),
-    >,
-    ///
-    /// Read response data. If data is available immediately copy up to
-    /// |bytes_to_read| bytes into |data_out|, set |bytes_read| to the number of
-    /// bytes copied, and return true (1). To read the data at a later time set
-    /// |bytes_read| to 0, return true (1) and call cef_callback_t::cont() when the
-    /// data is available. To indicate response completion return false (0).
-    ///
-    pub read_response: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_resource_handler_t,
-            data_out: *mut ::std::os::raw::c_void,
-            bytes_to_read: ::std::os::raw::c_int,
-            bytes_read: *mut ::std::os::raw::c_int,
-            callback: *mut _cef_callback_t,
-        ) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Return true (1) if the specified cookie can be sent with the request or
-    /// false (0) otherwise. If false (0) is returned for any cookie then no
-    /// cookies will be sent with the request.
-    ///
-    pub can_get_cookie: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_resource_handler_t,
-            cookie: *const _cef_cookie_t,
-        ) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Return true (1) if the specified cookie returned with the response can be
-    /// set or false (0) otherwise.
-    ///
-    pub can_set_cookie: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_resource_handler_t,
-            cookie: *const _cef_cookie_t,
-        ) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Request processing has been canceled.
-    ///
-    pub cancel: ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_resource_handler_t)>,
-}
-///
 /// Structure that manages custom scheme registrations.
 ///
 #[repr(C)]
@@ -10676,56 +13491,7 @@ pub struct _cef_scheme_registrar_t {
     /// Register a custom scheme. This function should not be called for the built-
     /// in HTTP, HTTPS, FILE, FTP, ABOUT and DATA schemes.
     ///
-    /// If |is_standard| is true (1) the scheme will be treated as a standard
-    /// scheme. Standard schemes are subject to URL canonicalization and parsing
-    /// rules as defined in the Common Internet Scheme Syntax RFC 1738 Section 3.1
-    /// available at http://www.ietf.org/rfc/rfc1738.txt
-    ///
-    /// In particular, the syntax for standard scheme URLs must be of the form:
-    /// <pre>
-    ///  [scheme]://[username]:[password]@[host]:[port]/[url-path]
-    /// </pre> Standard scheme URLs must have a host component that is a fully
-    /// qualified domain name as defined in Section 3.5 of RFC 1034 [13] and
-    /// Section 2.1 of RFC 1123. These URLs will be canonicalized to
-    /// "scheme://host/path" in the simplest case and
-    /// "scheme://username:password@host:port/path" in the most explicit case. For
-    /// example, "scheme:host/path" and "scheme:///host/path" will both be
-    /// canonicalized to "scheme://host/path". The origin of a standard scheme URL
-    /// is the combination of scheme, host and port (i.e., "scheme://host:port" in
-    /// the most explicit case).
-    ///
-    /// For non-standard scheme URLs only the "scheme:" component is parsed and
-    /// canonicalized. The remainder of the URL will be passed to the handler as-
-    /// is. For example, "scheme:///some%20text" will remain the same. Non-standard
-    /// scheme URLs cannot be used as a target for form submission.
-    ///
-    /// If |is_local| is true (1) the scheme will be treated with the same security
-    /// rules as those applied to "file" URLs. Normal pages cannot link to or
-    /// access local URLs. Also, by default, local URLs can only perform
-    /// XMLHttpRequest calls to the same URL (origin + path) that originated the
-    /// request. To allow XMLHttpRequest calls from a local URL to other URLs with
-    /// the same origin set the CefSettings.file_access_from_file_urls_allowed
-    /// value to true (1). To allow XMLHttpRequest calls from a local URL to all
-    /// origins set the CefSettings.universal_access_from_file_urls_allowed value
-    /// to true (1).
-    ///
-    /// If |is_display_isolated| is true (1) the scheme can only be displayed from
-    /// other content hosted with the same scheme. For example, pages in other
-    /// origins cannot create iframes or hyperlinks to URLs with the scheme. For
-    /// schemes that must be accessible from other schemes set this value to false
-    /// (0), set |is_cors_enabled| to true (1), and use CORS "Access-Control-Allow-
-    /// Origin" headers to further restrict access.
-    ///
-    /// If |is_secure| is true (1) the scheme will be treated with the same
-    /// security rules as those applied to "https" URLs. For example, loading this
-    /// scheme from other secure schemes will not trigger mixed content warnings.
-    ///
-    /// If |is_cors_enabled| is true (1) the scheme can be sent CORS requests. This
-    /// value should be true (1) in most cases where |is_standard| is true (1).
-    ///
-    /// If |is_csp_bypassing| is true (1) the scheme can bypass Content-Security-
-    /// Policy (CSP) checks. This value should be false (0) in most cases where
-    /// |is_standard| is true (1).
+    /// See cef_scheme_options_t for possible values for |options|.
     ///
     /// This function may be called on any thread. It should only be called once
     /// per unique |scheme_name| value. If |scheme_name| is already registered or
@@ -10735,12 +13501,7 @@ pub struct _cef_scheme_registrar_t {
         unsafe extern "C" fn(
             self_: *mut _cef_scheme_registrar_t,
             scheme_name: *const cef_string_t,
-            is_standard: ::std::os::raw::c_int,
-            is_local: ::std::os::raw::c_int,
-            is_display_isolated: ::std::os::raw::c_int,
-            is_secure: ::std::os::raw::c_int,
-            is_cors_enabled: ::std::os::raw::c_int,
-            is_csp_bypassing: ::std::os::raw::c_int,
+            options: ::std::os::raw::c_int,
         ) -> ::std::os::raw::c_int,
     >,
 }
@@ -10762,7 +13523,7 @@ pub struct _cef_scheme_handler_factory_t {
     /// will be the browser window and frame respectively that originated the
     /// request or NULL if the request did not originate from a browser window (for
     /// example, if the request came from cef_urlrequest_t). The |request| object
-    /// passed to this function will not contain cookie data.
+    /// passed to this function cannot be modified.
     ///
     pub create: ::std::option::Option<
         unsafe extern "C" fn(
@@ -10792,9 +13553,9 @@ extern "C" {
     /// function may be called multiple times to change or remove the factory that
     /// matches the specified |scheme_name| and optional |domain_name|. Returns false
     /// (0) if an error occurs. This function may be called on any thread in the
-    /// browser process. Using this function is equivalent to calling cef_request_tCo
-    /// ntext::cef_request_context_get_global_context()->register_scheme_handler_fact
-    /// ory().
+    /// browser process. Using this function is equivalent to calling cef_request_con
+    /// text_t::cef_request_context_get_global_context()->register_scheme_handler_fac
+    /// tory().
     ///
     pub fn cef_register_scheme_handler_factory(
         scheme_name: *const cef_string_t,
@@ -10807,8 +13568,8 @@ extern "C" {
     /// Clear all scheme handler factories registered with the global request
     /// context. Returns false (0) on error. This function may be called on any
     /// thread in the browser process. Using this function is equivalent to calling c
-    /// ef_request_tContext::cef_request_context_get_global_context()->clear_scheme_h
-    /// andler_factories().
+    /// ef_request_context_t::cef_request_context_get_global_context()->clear_scheme_
+    /// handler_factories().
     ///
     pub fn cef_clear_scheme_handler_factories() -> ::std::os::raw::c_int;
 }
@@ -10973,1637 +13734,6 @@ extern "C" {
     pub fn cef_enable_highdpi_support();
 }
 ///
-/// Callback structure for asynchronous continuation of file dialog requests.
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_file_dialog_callback_t {
-    ///
-    /// Base structure.
-    ///
-    pub base: cef_base_ref_counted_t,
-    ///
-    /// Continue the file selection. |selected_accept_filter| should be the 0-based
-    /// index of the value selected from the accept filters array passed to
-    /// cef_dialog_handler_t::OnFileDialog. |file_paths| should be a single value
-    /// or a list of values depending on the dialog mode. An NULL |file_paths|
-    /// value is treated the same as calling cancel().
-    ///
-    pub cont: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_file_dialog_callback_t,
-            selected_accept_filter: ::std::os::raw::c_int,
-            file_paths: cef_string_list_t,
-        ),
-    >,
-    ///
-    /// Cancel the file selection.
-    ///
-    pub cancel:
-        ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_file_dialog_callback_t)>,
-}
-///
-/// Implement this structure to handle dialog events. The functions of this
-/// structure will be called on the browser process UI thread.
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_dialog_handler_t {
-    ///
-    /// Base structure.
-    ///
-    pub base: cef_base_ref_counted_t,
-    ///
-    /// Called to run a file chooser dialog. |mode| represents the type of dialog
-    /// to display. |title| to the title to be used for the dialog and may be NULL
-    /// to show the default title ("Open" or "Save" depending on the mode).
-    /// |default_file_path| is the path with optional directory and/or file name
-    /// component that should be initially selected in the dialog. |accept_filters|
-    /// are used to restrict the selectable file types and may any combination of
-    /// (a) valid lower-cased MIME types (e.g. "text/*" or "image/*"), (b)
-    /// individual file extensions (e.g. ".txt" or ".png"), or (c) combined
-    /// description and file extension delimited using "|" and ";" (e.g. "Image
-    /// Types|.png;.gif;.jpg"). |selected_accept_filter| is the 0-based index of
-    /// the filter that should be selected by default. To display a custom dialog
-    /// return true (1) and execute |callback| either inline or at a later time. To
-    /// display the default dialog return false (0).
-    ///
-    pub on_file_dialog: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_dialog_handler_t,
-            browser: *mut _cef_browser_t,
-            mode: cef_file_dialog_mode_t,
-            title: *const cef_string_t,
-            default_file_path: *const cef_string_t,
-            accept_filters: cef_string_list_t,
-            selected_accept_filter: ::std::os::raw::c_int,
-            callback: *mut _cef_file_dialog_callback_t,
-        ) -> ::std::os::raw::c_int,
-    >,
-}
-///
-/// Implement this structure to handle events related to browser display state.
-/// The functions of this structure will be called on the UI thread.
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_display_handler_t {
-    ///
-    /// Base structure.
-    ///
-    pub base: cef_base_ref_counted_t,
-    ///
-    /// Called when a frame's address has changed.
-    ///
-    pub on_address_change: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_display_handler_t,
-            browser: *mut _cef_browser_t,
-            frame: *mut _cef_frame_t,
-            url: *const cef_string_t,
-        ),
-    >,
-    ///
-    /// Called when the page title changes.
-    ///
-    pub on_title_change: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_display_handler_t,
-            browser: *mut _cef_browser_t,
-            title: *const cef_string_t,
-        ),
-    >,
-    ///
-    /// Called when the page icon changes.
-    ///
-    pub on_favicon_urlchange: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_display_handler_t,
-            browser: *mut _cef_browser_t,
-            icon_urls: cef_string_list_t,
-        ),
-    >,
-    ///
-    /// Called when web content in the page has toggled fullscreen mode. If
-    /// |fullscreen| is true (1) the content will automatically be sized to fill
-    /// the browser content area. If |fullscreen| is false (0) the content will
-    /// automatically return to its original size and position. The client is
-    /// responsible for resizing the browser if desired.
-    ///
-    pub on_fullscreen_mode_change: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_display_handler_t,
-            browser: *mut _cef_browser_t,
-            fullscreen: ::std::os::raw::c_int,
-        ),
-    >,
-    ///
-    /// Called when the browser is about to display a tooltip. |text| contains the
-    /// text that will be displayed in the tooltip. To handle the display of the
-    /// tooltip yourself return true (1). Otherwise, you can optionally modify
-    /// |text| and then return false (0) to allow the browser to display the
-    /// tooltip. When window rendering is disabled the application is responsible
-    /// for drawing tooltips and the return value is ignored.
-    ///
-    pub on_tooltip: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_display_handler_t,
-            browser: *mut _cef_browser_t,
-            text: *mut cef_string_t,
-        ) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Called when the browser receives a status message. |value| contains the
-    /// text that will be displayed in the status message.
-    ///
-    pub on_status_message: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_display_handler_t,
-            browser: *mut _cef_browser_t,
-            value: *const cef_string_t,
-        ),
-    >,
-    ///
-    /// Called to display a console message. Return true (1) to stop the message
-    /// from being output to the console.
-    ///
-    pub on_console_message: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_display_handler_t,
-            browser: *mut _cef_browser_t,
-            level: cef_log_severity_t,
-            message: *const cef_string_t,
-            source: *const cef_string_t,
-            line: ::std::os::raw::c_int,
-        ) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Called when auto-resize is enabled via
-    /// cef_browser_host_t::SetAutoResizeEnabled and the contents have auto-
-    /// resized. |new_size| will be the desired size in view coordinates. Return
-    /// true (1) if the resize was handled or false (0) for default handling.
-    ///
-    pub on_auto_resize: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_display_handler_t,
-            browser: *mut _cef_browser_t,
-            new_size: *const cef_size_t,
-        ) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Called when the overall page loading progress has changed. |progress|
-    /// ranges from 0.0 to 1.0.
-    ///
-    pub on_loading_progress_change: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_display_handler_t,
-            browser: *mut _cef_browser_t,
-            progress: f64,
-        ),
-    >,
-}
-///
-/// Structure used to represent a download item.
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_download_item_t {
-    ///
-    /// Base structure.
-    ///
-    pub base: cef_base_ref_counted_t,
-    ///
-    /// Returns true (1) if this object is valid. Do not call any other functions
-    /// if this function returns false (0).
-    ///
-    pub is_valid: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Returns true (1) if the download is in progress.
-    ///
-    pub is_in_progress: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Returns true (1) if the download is complete.
-    ///
-    pub is_complete: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Returns true (1) if the download has been canceled or interrupted.
-    ///
-    pub is_canceled: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Returns a simple speed estimate in bytes/s.
-    ///
-    pub get_current_speed:
-        ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> int64>,
-    ///
-    /// Returns the rough percent complete or -1 if the receive total size is
-    /// unknown.
-    ///
-    pub get_percent_complete: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Returns the total number of bytes.
-    ///
-    pub get_total_bytes:
-        ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> int64>,
-    ///
-    /// Returns the number of received bytes.
-    ///
-    pub get_received_bytes:
-        ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> int64>,
-    ///
-    /// Returns the time that the download started.
-    ///
-    pub get_start_time:
-        ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> cef_time_t>,
-    ///
-    /// Returns the time that the download ended.
-    ///
-    pub get_end_time:
-        ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> cef_time_t>,
-    ///
-    /// Returns the full path to the downloaded or downloading file.
-    ///
-    /// The resulting string must be freed by calling cef_string_userfree_free().
-    pub get_full_path: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> cef_string_userfree_t,
-    >,
-    ///
-    /// Returns the unique identifier for this download.
-    ///
-    pub get_id:
-        ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> uint32>,
-    ///
-    /// Returns the URL.
-    ///
-    /// The resulting string must be freed by calling cef_string_userfree_free().
-    pub get_url: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> cef_string_userfree_t,
-    >,
-    ///
-    /// Returns the original URL before any redirections.
-    ///
-    /// The resulting string must be freed by calling cef_string_userfree_free().
-    pub get_original_url: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> cef_string_userfree_t,
-    >,
-    ///
-    /// Returns the suggested file name.
-    ///
-    /// The resulting string must be freed by calling cef_string_userfree_free().
-    pub get_suggested_file_name: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> cef_string_userfree_t,
-    >,
-    ///
-    /// Returns the content disposition.
-    ///
-    /// The resulting string must be freed by calling cef_string_userfree_free().
-    pub get_content_disposition: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> cef_string_userfree_t,
-    >,
-    ///
-    /// Returns the mime type.
-    ///
-    /// The resulting string must be freed by calling cef_string_userfree_free().
-    pub get_mime_type: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_download_item_t) -> cef_string_userfree_t,
-    >,
-}
-///
-/// Callback structure used to asynchronously continue a download.
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_before_download_callback_t {
-    ///
-    /// Base structure.
-    ///
-    pub base: cef_base_ref_counted_t,
-    ///
-    /// Call to continue the download. Set |download_path| to the full file path
-    /// for the download including the file name or leave blank to use the
-    /// suggested name and the default temp directory. Set |show_dialog| to true
-    /// (1) if you do wish to show the default "Save As" dialog.
-    ///
-    pub cont: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_before_download_callback_t,
-            download_path: *const cef_string_t,
-            show_dialog: ::std::os::raw::c_int,
-        ),
-    >,
-}
-///
-/// Callback structure used to asynchronously cancel a download.
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_download_item_callback_t {
-    ///
-    /// Base structure.
-    ///
-    pub base: cef_base_ref_counted_t,
-    ///
-    /// Call to cancel the download.
-    ///
-    pub cancel:
-        ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_download_item_callback_t)>,
-    ///
-    /// Call to pause the download.
-    ///
-    pub pause:
-        ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_download_item_callback_t)>,
-    ///
-    /// Call to resume the download.
-    ///
-    pub resume:
-        ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_download_item_callback_t)>,
-}
-///
-/// Structure used to handle file downloads. The functions of this structure will
-/// called on the browser process UI thread.
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_download_handler_t {
-    ///
-    /// Base structure.
-    ///
-    pub base: cef_base_ref_counted_t,
-    ///
-    /// Called before a download begins. |suggested_name| is the suggested name for
-    /// the download file. By default the download will be canceled. Execute
-    /// |callback| either asynchronously or in this function to continue the
-    /// download if desired. Do not keep a reference to |download_item| outside of
-    /// this function.
-    ///
-    pub on_before_download: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_download_handler_t,
-            browser: *mut _cef_browser_t,
-            download_item: *mut _cef_download_item_t,
-            suggested_name: *const cef_string_t,
-            callback: *mut _cef_before_download_callback_t,
-        ),
-    >,
-    ///
-    /// Called when a download's status or progress information has been updated.
-    /// This may be called multiple times before and after on_before_download().
-    /// Execute |callback| either asynchronously or in this function to cancel the
-    /// download if desired. Do not keep a reference to |download_item| outside of
-    /// this function.
-    ///
-    pub on_download_updated: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_download_handler_t,
-            browser: *mut _cef_browser_t,
-            download_item: *mut _cef_download_item_t,
-            callback: *mut _cef_download_item_callback_t,
-        ),
-    >,
-}
-///
-/// Implement this structure to handle events related to dragging. The functions
-/// of this structure will be called on the UI thread.
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_drag_handler_t {
-    ///
-    /// Base structure.
-    ///
-    pub base: cef_base_ref_counted_t,
-    ///
-    /// Called when an external drag event enters the browser window. |dragData|
-    /// contains the drag event data and |mask| represents the type of drag
-    /// operation. Return false (0) for default drag handling behavior or true (1)
-    /// to cancel the drag event.
-    ///
-    pub on_drag_enter: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_drag_handler_t,
-            browser: *mut _cef_browser_t,
-            dragData: *mut _cef_drag_data_t,
-            mask: cef_drag_operations_mask_t,
-        ) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Called whenever draggable regions for the browser window change. These can
-    /// be specified using the '-webkit-app-region: drag/no-drag' CSS-property. If
-    /// draggable regions are never defined in a document this function will also
-    /// never be called. If the last draggable region is removed from a document
-    /// this function will be called with an NULL vector.
-    ///
-    pub on_draggable_regions_changed: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_drag_handler_t,
-            browser: *mut _cef_browser_t,
-            regionsCount: usize,
-            regions: *const cef_draggable_region_t,
-        ),
-    >,
-}
-///
-/// Implement this structure to handle events related to find results. The
-/// functions of this structure will be called on the UI thread.
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_find_handler_t {
-    ///
-    /// Base structure.
-    ///
-    pub base: cef_base_ref_counted_t,
-    ///
-    /// Called to report find results returned by cef_browser_host_t::find().
-    /// |identifer| is the identifier passed to find(), |count| is the number of
-    /// matches currently identified, |selectionRect| is the location of where the
-    /// match was found (in window coordinates), |activeMatchOrdinal| is the
-    /// current position in the search results, and |finalUpdate| is true (1) if
-    /// this is the last find notification.
-    ///
-    pub on_find_result: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_find_handler_t,
-            browser: *mut _cef_browser_t,
-            identifier: ::std::os::raw::c_int,
-            count: ::std::os::raw::c_int,
-            selectionRect: *const cef_rect_t,
-            activeMatchOrdinal: ::std::os::raw::c_int,
-            finalUpdate: ::std::os::raw::c_int,
-        ),
-    >,
-}
-///
-/// Implement this structure to handle events related to focus. The functions of
-/// this structure will be called on the UI thread.
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_focus_handler_t {
-    ///
-    /// Base structure.
-    ///
-    pub base: cef_base_ref_counted_t,
-    ///
-    /// Called when the browser component is about to loose focus. For instance, if
-    /// focus was on the last HTML element and the user pressed the TAB key. |next|
-    /// will be true (1) if the browser is giving focus to the next component and
-    /// false (0) if the browser is giving focus to the previous component.
-    ///
-    pub on_take_focus: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_focus_handler_t,
-            browser: *mut _cef_browser_t,
-            next: ::std::os::raw::c_int,
-        ),
-    >,
-    ///
-    /// Called when the browser component is requesting focus. |source| indicates
-    /// where the focus request is originating from. Return false (0) to allow the
-    /// focus to be set or true (1) to cancel setting the focus.
-    ///
-    pub on_set_focus: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_focus_handler_t,
-            browser: *mut _cef_browser_t,
-            source: cef_focus_source_t,
-        ) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Called when the browser component has received focus.
-    ///
-    pub on_got_focus: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_focus_handler_t, browser: *mut _cef_browser_t),
-    >,
-}
-///
-/// Callback structure used for asynchronous continuation of JavaScript dialog
-/// requests.
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_jsdialog_callback_t {
-    ///
-    /// Base structure.
-    ///
-    pub base: cef_base_ref_counted_t,
-    ///
-    /// Continue the JS dialog request. Set |success| to true (1) if the OK button
-    /// was pressed. The |user_input| value should be specified for prompt dialogs.
-    ///
-    pub cont: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_jsdialog_callback_t,
-            success: ::std::os::raw::c_int,
-            user_input: *const cef_string_t,
-        ),
-    >,
-}
-///
-/// Implement this structure to handle events related to JavaScript dialogs. The
-/// functions of this structure will be called on the UI thread.
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_jsdialog_handler_t {
-    ///
-    /// Base structure.
-    ///
-    pub base: cef_base_ref_counted_t,
-    ///
-    /// Called to run a JavaScript dialog. If |origin_url| is non-NULL it can be
-    /// passed to the CefFormatUrlForSecurityDisplay function to retrieve a secure
-    /// and user-friendly display string. The |default_prompt_text| value will be
-    /// specified for prompt dialogs only. Set |suppress_message| to true (1) and
-    /// return false (0) to suppress the message (suppressing messages is
-    /// preferable to immediately executing the callback as this is used to detect
-    /// presumably malicious behavior like spamming alert messages in
-    /// onbeforeunload). Set |suppress_message| to false (0) and return false (0)
-    /// to use the default implementation (the default implementation will show one
-    /// modal dialog at a time and suppress any additional dialog requests until
-    /// the displayed dialog is dismissed). Return true (1) if the application will
-    /// use a custom dialog or if the callback has been executed immediately.
-    /// Custom dialogs may be either modal or modeless. If a custom dialog is used
-    /// the application must execute |callback| once the custom dialog is
-    /// dismissed.
-    ///
-    pub on_jsdialog: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_jsdialog_handler_t,
-            browser: *mut _cef_browser_t,
-            origin_url: *const cef_string_t,
-            dialog_type: cef_jsdialog_type_t,
-            message_text: *const cef_string_t,
-            default_prompt_text: *const cef_string_t,
-            callback: *mut _cef_jsdialog_callback_t,
-            suppress_message: *mut ::std::os::raw::c_int,
-        ) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Called to run a dialog asking the user if they want to leave a page. Return
-    /// false (0) to use the default dialog implementation. Return true (1) if the
-    /// application will use a custom dialog or if the callback has been executed
-    /// immediately. Custom dialogs may be either modal or modeless. If a custom
-    /// dialog is used the application must execute |callback| once the custom
-    /// dialog is dismissed.
-    ///
-    pub on_before_unload_dialog: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_jsdialog_handler_t,
-            browser: *mut _cef_browser_t,
-            message_text: *const cef_string_t,
-            is_reload: ::std::os::raw::c_int,
-            callback: *mut _cef_jsdialog_callback_t,
-        ) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Called to cancel any pending dialogs and reset any saved dialog state. Will
-    /// be called due to events like page navigation irregardless of whether any
-    /// dialogs are currently pending.
-    ///
-    pub on_reset_dialog_state: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_jsdialog_handler_t, browser: *mut _cef_browser_t),
-    >,
-    ///
-    /// Called when the default implementation dialog is closed.
-    ///
-    pub on_dialog_closed: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_jsdialog_handler_t, browser: *mut _cef_browser_t),
-    >,
-}
-///
-/// Implement this structure to handle events related to keyboard input. The
-/// functions of this structure will be called on the UI thread.
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_keyboard_handler_t {
-    ///
-    /// Base structure.
-    ///
-    pub base: cef_base_ref_counted_t,
-    ///
-    /// Called before a keyboard event is sent to the renderer. |event| contains
-    /// information about the keyboard event. |os_event| is the operating system
-    /// event message, if any. Return true (1) if the event was handled or false
-    /// (0) otherwise. If the event will be handled in on_key_event() as a keyboard
-    /// shortcut set |is_keyboard_shortcut| to true (1) and return false (0).
-    ///
-    pub on_pre_key_event: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_keyboard_handler_t,
-            browser: *mut _cef_browser_t,
-            event: *const _cef_key_event_t,
-            os_event: *mut ::std::os::raw::c_void,
-            is_keyboard_shortcut: *mut ::std::os::raw::c_int,
-        ) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Called after the renderer and JavaScript in the page has had a chance to
-    /// handle the event. |event| contains information about the keyboard event.
-    /// |os_event| is the operating system event message, if any. Return true (1)
-    /// if the keyboard event was handled or false (0) otherwise.
-    ///
-    pub on_key_event: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_keyboard_handler_t,
-            browser: *mut _cef_browser_t,
-            event: *const _cef_key_event_t,
-            os_event: *mut ::std::os::raw::c_void,
-        ) -> ::std::os::raw::c_int,
-    >,
-}
-///
-/// Implement this structure to handle events related to browser life span. The
-/// functions of this structure will be called on the UI thread unless otherwise
-/// indicated.
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_life_span_handler_t {
-    ///
-    /// Base structure.
-    ///
-    pub base: cef_base_ref_counted_t,
-    ///
-    /// Called on the UI thread before a new popup browser is created. The
-    /// |browser| and |frame| values represent the source of the popup request. The
-    /// |target_url| and |target_frame_name| values indicate where the popup
-    /// browser should navigate and may be NULL if not specified with the request.
-    /// The |target_disposition| value indicates where the user intended to open
-    /// the popup (e.g. current tab, new tab, etc). The |user_gesture| value will
-    /// be true (1) if the popup was opened via explicit user gesture (e.g.
-    /// clicking a link) or false (0) if the popup opened automatically (e.g. via
-    /// the DomContentLoaded event). The |popupFeatures| structure contains
-    /// additional information about the requested popup window. To allow creation
-    /// of the popup browser optionally modify |windowInfo|, |client|, |settings|
-    /// and |no_javascript_access| and return false (0). To cancel creation of the
-    /// popup browser return true (1). The |client| and |settings| values will
-    /// default to the source browser's values. If the |no_javascript_access| value
-    /// is set to false (0) the new browser will not be scriptable and may not be
-    /// hosted in the same renderer process as the source browser. Any
-    /// modifications to |windowInfo| will be ignored if the parent browser is
-    /// wrapped in a cef_browser_view_t. Popup browser creation will be canceled if
-    /// the parent browser is destroyed before the popup browser creation completes
-    /// (indicated by a call to OnAfterCreated for the popup browser).
-    ///
-    pub on_before_popup: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_life_span_handler_t,
-            browser: *mut _cef_browser_t,
-            frame: *mut _cef_frame_t,
-            target_url: *const cef_string_t,
-            target_frame_name: *const cef_string_t,
-            target_disposition: cef_window_open_disposition_t,
-            user_gesture: ::std::os::raw::c_int,
-            popupFeatures: *const _cef_popup_features_t,
-            windowInfo: *mut _cef_window_info_t,
-            client: *mut *mut _cef_client_t,
-            settings: *mut _cef_browser_settings_t,
-            no_javascript_access: *mut ::std::os::raw::c_int,
-        ) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Called after a new browser is created. This callback will be the first
-    /// notification that references |browser|.
-    ///
-    pub on_after_created: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_life_span_handler_t, browser: *mut _cef_browser_t),
-    >,
-    ///
-    /// Called when a browser has recieved a request to close. This may result
-    /// directly from a call to cef_browser_host_t::*close_browser() or indirectly
-    /// if the browser is parented to a top-level window created by CEF and the
-    /// user attempts to close that window (by clicking the 'X', for example). The
-    /// do_close() function will be called after the JavaScript 'onunload' event
-    /// has been fired.
-    ///
-    /// An application should handle top-level owner window close notifications by
-    /// calling cef_browser_host_t::try_close_browser() or
-    /// cef_browser_host_t::CloseBrowser(false (0)) instead of allowing the window
-    /// to close immediately (see the examples below). This gives CEF an
-    /// opportunity to process the 'onbeforeunload' event and optionally cancel the
-    /// close before do_close() is called.
-    ///
-    /// When windowed rendering is enabled CEF will internally create a window or
-    /// view to host the browser. In that case returning false (0) from do_close()
-    /// will send the standard close notification to the browser's top-level owner
-    /// window (e.g. WM_CLOSE on Windows, performClose: on OS X, "delete_event" on
-    /// Linux or cef_window_delegate_t::can_close() callback from Views). If the
-    /// browser's host window/view has already been destroyed (via view hierarchy
-    /// tear-down, for example) then do_close() will not be called for that browser
-    /// since is no longer possible to cancel the close.
-    ///
-    /// When windowed rendering is disabled returning false (0) from do_close()
-    /// will cause the browser object to be destroyed immediately.
-    ///
-    /// If the browser's top-level owner window requires a non-standard close
-    /// notification then send that notification from do_close() and return true
-    /// (1).
-    ///
-    /// The cef_life_span_handler_t::on_before_close() function will be called
-    /// after do_close() (if do_close() is called) and immediately before the
-    /// browser object is destroyed. The application should only exit after
-    /// on_before_close() has been called for all existing browsers.
-    ///
-    /// The below examples describe what should happen during window close when the
-    /// browser is parented to an application-provided top-level window.
-    ///
-    /// Example 1: Using cef_browser_host_t::try_close_browser(). This is
-    /// recommended for clients using standard close handling and windows created
-    /// on the browser process UI thread. 1.  User clicks the window close button
-    /// which sends a close notification to
-    ///     the application's top-level window.
-    /// 2.  Application's top-level window receives the close notification and
-    ///     calls TryCloseBrowser() (which internally calls CloseBrowser(false)).
-    ///     TryCloseBrowser() returns false so the client cancels the window close.
-    /// 3.  JavaScript 'onbeforeunload' handler executes and shows the close
-    ///     confirmation dialog (which can be overridden via
-    ///     CefJSDialogHandler::OnBeforeUnloadDialog()).
-    /// 4.  User approves the close. 5.  JavaScript 'onunload' handler executes. 6.
-    /// CEF sends a close notification to the application's top-level window
-    ///     (because DoClose() returned false by default).
-    /// 7.  Application's top-level window receives the close notification and
-    ///     calls TryCloseBrowser(). TryCloseBrowser() returns true so the client
-    ///     allows the window close.
-    /// 8.  Application's top-level window is destroyed. 9.  Application's
-    /// on_before_close() handler is called and the browser object
-    ///     is destroyed.
-    /// 10. Application exits by calling cef_quit_message_loop() if no other
-    /// browsers
-    ///     exist.
-    ///
-    /// Example 2: Using cef_browser_host_t::CloseBrowser(false (0)) and
-    /// implementing the do_close() callback. This is recommended for clients using
-    /// non-standard close handling or windows that were not created on the browser
-    /// process UI thread. 1.  User clicks the window close button which sends a
-    /// close notification to
-    ///     the application's top-level window.
-    /// 2.  Application's top-level window receives the close notification and:
-    ///     A. Calls CefBrowserHost::CloseBrowser(false).
-    ///     B. Cancels the window close.
-    /// 3.  JavaScript 'onbeforeunload' handler executes and shows the close
-    ///     confirmation dialog (which can be overridden via
-    ///     CefJSDialogHandler::OnBeforeUnloadDialog()).
-    /// 4.  User approves the close. 5.  JavaScript 'onunload' handler executes. 6.
-    /// Application's do_close() handler is called. Application will:
-    ///     A. Set a flag to indicate that the next close attempt will be allowed.
-    ///     B. Return false.
-    /// 7.  CEF sends an close notification to the application's top-level window.
-    /// 8.  Application's top-level window receives the close notification and
-    ///     allows the window to close based on the flag from #6B.
-    /// 9.  Application's top-level window is destroyed. 10. Application's
-    /// on_before_close() handler is called and the browser object
-    ///     is destroyed.
-    /// 11. Application exits by calling cef_quit_message_loop() if no other
-    /// browsers
-    ///     exist.
-    ///
-    pub do_close: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_life_span_handler_t,
-            browser: *mut _cef_browser_t,
-        ) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Called just before a browser is destroyed. Release all references to the
-    /// browser object and do not attempt to execute any functions on the browser
-    /// object after this callback returns. This callback will be the last
-    /// notification that references |browser|. See do_close() documentation for
-    /// additional usage information.
-    ///
-    pub on_before_close: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_life_span_handler_t, browser: *mut _cef_browser_t),
-    >,
-}
-///
-/// Implement this structure to receive accessibility notification when
-/// accessibility events have been registered. The functions of this structure
-/// will be called on the UI thread.
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_accessibility_handler_t {
-    ///
-    /// Base structure.
-    ///
-    pub base: cef_base_ref_counted_t,
-    ///
-    /// Called after renderer process sends accessibility tree changes to the
-    /// browser process.
-    ///
-    pub on_accessibility_tree_change: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_accessibility_handler_t, value: *mut _cef_value_t),
-    >,
-    ///
-    /// Called after renderer process sends accessibility location changes to the
-    /// browser process.
-    ///
-    pub on_accessibility_location_change: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_accessibility_handler_t, value: *mut _cef_value_t),
-    >,
-}
-///
-/// Implement this structure to handle events when window rendering is disabled.
-/// The functions of this structure will be called on the UI thread.
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_render_handler_t {
-    ///
-    /// Base structure.
-    ///
-    pub base: cef_base_ref_counted_t,
-    ///
-    /// Return the handler for accessibility notifications. If no handler is
-    /// provided the default implementation will be used.
-    ///
-    pub get_accessibility_handler: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_render_handler_t,
-        ) -> *mut _cef_accessibility_handler_t,
-    >,
-    ///
-    /// Called to retrieve the root window rectangle in screen coordinates. Return
-    /// true (1) if the rectangle was provided.
-    ///
-    pub get_root_screen_rect: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_render_handler_t,
-            browser: *mut _cef_browser_t,
-            rect: *mut cef_rect_t,
-        ) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Called to retrieve the view rectangle which is relative to screen
-    /// coordinates. Return true (1) if the rectangle was provided.
-    ///
-    pub get_view_rect: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_render_handler_t,
-            browser: *mut _cef_browser_t,
-            rect: *mut cef_rect_t,
-        ) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Called to retrieve the translation from view coordinates to actual screen
-    /// coordinates. Return true (1) if the screen coordinates were provided.
-    ///
-    pub get_screen_point: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_render_handler_t,
-            browser: *mut _cef_browser_t,
-            viewX: ::std::os::raw::c_int,
-            viewY: ::std::os::raw::c_int,
-            screenX: *mut ::std::os::raw::c_int,
-            screenY: *mut ::std::os::raw::c_int,
-        ) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Called to allow the client to fill in the CefScreenInfo object with
-    /// appropriate values. Return true (1) if the |screen_info| structure has been
-    /// modified.
-    ///
-    /// If the screen info rectangle is left NULL the rectangle from GetViewRect
-    /// will be used. If the rectangle is still NULL or invalid popups may not be
-    /// drawn correctly.
-    ///
-    pub get_screen_info: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_render_handler_t,
-            browser: *mut _cef_browser_t,
-            screen_info: *mut _cef_screen_info_t,
-        ) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Called when the browser wants to show or hide the popup widget. The popup
-    /// should be shown if |show| is true (1) and hidden if |show| is false (0).
-    ///
-    pub on_popup_show: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_render_handler_t,
-            browser: *mut _cef_browser_t,
-            show: ::std::os::raw::c_int,
-        ),
-    >,
-    ///
-    /// Called when the browser wants to move or resize the popup widget. |rect|
-    /// contains the new location and size in view coordinates.
-    ///
-    pub on_popup_size: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_render_handler_t,
-            browser: *mut _cef_browser_t,
-            rect: *const cef_rect_t,
-        ),
-    >,
-    ///
-    /// Called when an element should be painted. Pixel values passed to this
-    /// function are scaled relative to view coordinates based on the value of
-    /// CefScreenInfo.device_scale_factor returned from GetScreenInfo. |type|
-    /// indicates whether the element is the view or the popup widget. |buffer|
-    /// contains the pixel data for the whole image. |dirtyRects| contains the set
-    /// of rectangles in pixel coordinates that need to be repainted. |buffer| will
-    /// be |width|*|height|*4 bytes in size and represents a BGRA image with an
-    /// upper-left origin.
-    ///
-    pub on_paint: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_render_handler_t,
-            browser: *mut _cef_browser_t,
-            type_: cef_paint_element_type_t,
-            dirtyRectsCount: usize,
-            dirtyRects: *const cef_rect_t,
-            buffer: *const ::std::os::raw::c_void,
-            width: ::std::os::raw::c_int,
-            height: ::std::os::raw::c_int,
-        ),
-    >,
-    ///
-    /// Called when the browser's cursor has changed. If |type| is CT_CUSTOM then
-    /// |custom_cursor_info| will be populated with the custom cursor information.
-    ///
-    pub on_cursor_change: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_render_handler_t,
-            browser: *mut _cef_browser_t,
-            cursor: *mut ::std::os::raw::c_void,
-            type_: cef_cursor_type_t,
-            custom_cursor_info: *const _cef_cursor_info_t,
-        ),
-    >,
-    ///
-    /// Called when the user starts dragging content in the web view. Contextual
-    /// information about the dragged content is supplied by |drag_data|. (|x|,
-    /// |y|) is the drag start location in screen coordinates. OS APIs that run a
-    /// system message loop may be used within the StartDragging call.
-    ///
-    /// Return false (0) to abort the drag operation. Don't call any of
-    /// cef_browser_host_t::DragSource*Ended* functions after returning false (0).
-    ///
-    /// Return true (1) to handle the drag operation. Call
-    /// cef_browser_host_t::DragSourceEndedAt and DragSourceSystemDragEnded either
-    /// synchronously or asynchronously to inform the web view that the drag
-    /// operation has ended.
-    ///
-    pub start_dragging: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_render_handler_t,
-            browser: *mut _cef_browser_t,
-            drag_data: *mut _cef_drag_data_t,
-            allowed_ops: cef_drag_operations_mask_t,
-            x: ::std::os::raw::c_int,
-            y: ::std::os::raw::c_int,
-        ) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Called when the web view wants to update the mouse cursor during a drag &
-    /// drop operation. |operation| describes the allowed operation (none, move,
-    /// copy, link).
-    ///
-    pub update_drag_cursor: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_render_handler_t,
-            browser: *mut _cef_browser_t,
-            operation: cef_drag_operations_mask_t,
-        ),
-    >,
-    ///
-    /// Called when the scroll offset has changed.
-    ///
-    pub on_scroll_offset_changed: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_render_handler_t,
-            browser: *mut _cef_browser_t,
-            x: f64,
-            y: f64,
-        ),
-    >,
-    ///
-    /// Called when the IME composition range has changed. |selected_range| is the
-    /// range of characters that have been selected. |character_bounds| is the
-    /// bounds of each character in view coordinates.
-    ///
-    pub on_ime_composition_range_changed: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_render_handler_t,
-            browser: *mut _cef_browser_t,
-            selected_range: *const cef_range_t,
-            character_boundsCount: usize,
-            character_bounds: *const cef_rect_t,
-        ),
-    >,
-    ///
-    /// Called when text selection has changed for the specified |browser|.
-    /// |selected_text| is the currently selected text and |selected_range| is the
-    /// character range.
-    ///
-    pub on_text_selection_changed: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_render_handler_t,
-            browser: *mut _cef_browser_t,
-            selected_text: *const cef_string_t,
-            selected_range: *const cef_range_t,
-        ),
-    >,
-}
-///
-/// Callback structure used for asynchronous continuation of authentication
-/// requests.
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_auth_callback_t {
-    ///
-    /// Base structure.
-    ///
-    pub base: cef_base_ref_counted_t,
-    ///
-    /// Continue the authentication request.
-    ///
-    pub cont: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_auth_callback_t,
-            username: *const cef_string_t,
-            password: *const cef_string_t,
-        ),
-    >,
-    ///
-    /// Cancel the authentication request.
-    ///
-    pub cancel: ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_auth_callback_t)>,
-}
-///
-/// Implement this structure to filter resource response content. The functions
-/// of this structure will be called on the browser process IO thread.
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_response_filter_t {
-    ///
-    /// Base structure.
-    ///
-    pub base: cef_base_ref_counted_t,
-    ///
-    /// Initialize the response filter. Will only be called a single time. The
-    /// filter will not be installed if this function returns false (0).
-    ///
-    pub init_filter: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_response_filter_t) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Called to filter a chunk of data. Expected usage is as follows:
-    ///
-    ///  A. Read input data from |data_in| and set |data_in_read| to the number of
-    ///     bytes that were read up to a maximum of |data_in_size|. |data_in| will
-    ///     be NULL if |data_in_size| is zero.
-    ///  B. Write filtered output data to |data_out| and set |data_out_written| to
-    ///     the number of bytes that were written up to a maximum of
-    ///     |data_out_size|. If no output data was written then all data must be
-    ///     read from |data_in| (user must set |data_in_read| = |data_in_size|).
-    ///  C. Return RESPONSE_FILTER_DONE if all output data was written or
-    ///     RESPONSE_FILTER_NEED_MORE_DATA if output data is still pending.
-    ///
-    /// This function will be called repeatedly until the input buffer has been
-    /// fully read (user sets |data_in_read| = |data_in_size|) and there is no more
-    /// input data to filter (the resource response is complete). This function may
-    /// then be called an additional time with an NULL input buffer if the user
-    /// filled the output buffer (set |data_out_written| = |data_out_size|) and
-    /// returned RESPONSE_FILTER_NEED_MORE_DATA to indicate that output data is
-    /// still pending.
-    ///
-    /// Calls to this function will stop when one of the following conditions is
-    /// met:
-    ///
-    ///  A. There is no more input data to filter (the resource response is
-    ///     complete) and the user sets |data_out_written| = 0 or returns
-    ///     RESPONSE_FILTER_DONE to indicate that all data has been written, or;
-    ///  B. The user returns RESPONSE_FILTER_ERROR to indicate an error.
-    ///
-    /// Do not keep a reference to the buffers passed to this function.
-    ///
-    pub filter: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_response_filter_t,
-            data_in: *mut ::std::os::raw::c_void,
-            data_in_size: usize,
-            data_in_read: *mut usize,
-            data_out: *mut ::std::os::raw::c_void,
-            data_out_size: usize,
-            data_out_written: *mut usize,
-        ) -> cef_response_filter_status_t,
-    >,
-}
-///
-/// Structure representing SSL information.
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_sslinfo_t {
-    ///
-    /// Base structure.
-    ///
-    pub base: cef_base_ref_counted_t,
-    ///
-    /// Returns a bitmask containing any and all problems verifying the server
-    /// certificate.
-    ///
-    pub get_cert_status: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_sslinfo_t) -> cef_cert_status_t,
-    >,
-    ///
-    /// Returns the X.509 certificate.
-    ///
-    pub get_x509certificate: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_sslinfo_t) -> *mut _cef_x509certificate_t,
-    >,
-}
-extern "C" {
-    ///
-    /// Returns true (1) if the certificate status has any error, major or minor.
-    ///
-    pub fn cef_is_cert_status_error(status: cef_cert_status_t) -> ::std::os::raw::c_int;
-}
-extern "C" {
-    ///
-    /// Returns true (1) if the certificate status represents only minor errors (e.g.
-    /// failure to verify certificate revocation).
-    ///
-    pub fn cef_is_cert_status_minor_error(status: cef_cert_status_t) -> ::std::os::raw::c_int;
-}
-///
-/// Callback structure used for asynchronous continuation of url requests.
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_request_callback_t {
-    ///
-    /// Base structure.
-    ///
-    pub base: cef_base_ref_counted_t,
-    ///
-    /// Continue the url request. If |allow| is true (1) the request will be
-    /// continued. Otherwise, the request will be canceled.
-    ///
-    pub cont: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_request_callback_t, allow: ::std::os::raw::c_int),
-    >,
-    ///
-    /// Cancel the url request.
-    ///
-    pub cancel: ::std::option::Option<unsafe extern "C" fn(self_: *mut _cef_request_callback_t)>,
-}
-///
-/// Callback structure used to select a client certificate for authentication.
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_select_client_certificate_callback_t {
-    ///
-    /// Base structure.
-    ///
-    pub base: cef_base_ref_counted_t,
-    ///
-    /// Chooses the specified certificate for client certificate authentication.
-    /// NULL value means that no client certificate should be used.
-    ///
-    pub select: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_select_client_certificate_callback_t,
-            cert: *mut _cef_x509certificate_t,
-        ),
-    >,
-}
-///
-/// Implement this structure to handle events related to browser requests. The
-/// functions of this structure will be called on the thread indicated.
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_request_handler_t {
-    ///
-    /// Base structure.
-    ///
-    pub base: cef_base_ref_counted_t,
-    ///
-    /// Called on the UI thread before browser navigation. Return true (1) to
-    /// cancel the navigation or false (0) to allow the navigation to proceed. The
-    /// |request| object cannot be modified in this callback.
-    /// cef_load_handler_t::OnLoadingStateChange will be called twice in all cases.
-    /// If the navigation is allowed cef_load_handler_t::OnLoadStart and
-    /// cef_load_handler_t::OnLoadEnd will be called. If the navigation is canceled
-    /// cef_load_handler_t::OnLoadError will be called with an |errorCode| value of
-    /// ERR_ABORTED. The |user_gesture| value will be true (1) if the browser
-    /// navigated via explicit user gesture (e.g. clicking a link) or false (0) if
-    /// it navigated automatically (e.g. via the DomContentLoaded event).
-    ///
-    pub on_before_browse: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_request_handler_t,
-            browser: *mut _cef_browser_t,
-            frame: *mut _cef_frame_t,
-            request: *mut _cef_request_t,
-            user_gesture: ::std::os::raw::c_int,
-            is_redirect: ::std::os::raw::c_int,
-        ) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Called on the UI thread before OnBeforeBrowse in certain limited cases
-    /// where navigating a new or different browser might be desirable. This
-    /// includes user-initiated navigation that might open in a special way (e.g.
-    /// links clicked via middle-click or ctrl + left-click) and certain types of
-    /// cross-origin navigation initiated from the renderer process (e.g.
-    /// navigating the top-level frame to/from a file URL). The |browser| and
-    /// |frame| values represent the source of the navigation. The
-    /// |target_disposition| value indicates where the user intended to navigate
-    /// the browser based on standard Chromium behaviors (e.g. current tab, new
-    /// tab, etc). The |user_gesture| value will be true (1) if the browser
-    /// navigated via explicit user gesture (e.g. clicking a link) or false (0) if
-    /// it navigated automatically (e.g. via the DomContentLoaded event). Return
-    /// true (1) to cancel the navigation or false (0) to allow the navigation to
-    /// proceed in the source browser's top-level frame.
-    ///
-    pub on_open_urlfrom_tab: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_request_handler_t,
-            browser: *mut _cef_browser_t,
-            frame: *mut _cef_frame_t,
-            target_url: *const cef_string_t,
-            target_disposition: cef_window_open_disposition_t,
-            user_gesture: ::std::os::raw::c_int,
-        ) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Called on the IO thread before a resource request is loaded. The |request|
-    /// object may be modified. Return RV_CONTINUE to continue the request
-    /// immediately. Return RV_CONTINUE_ASYNC and call cef_request_tCallback::
-    /// cont() at a later time to continue or cancel the request asynchronously.
-    /// Return RV_CANCEL to cancel the request immediately.
-    ///
-    ///
-    pub on_before_resource_load: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_request_handler_t,
-            browser: *mut _cef_browser_t,
-            frame: *mut _cef_frame_t,
-            request: *mut _cef_request_t,
-            callback: *mut _cef_request_callback_t,
-        ) -> cef_return_value_t,
-    >,
-    ///
-    /// Called on the IO thread before a resource is loaded. To allow the resource
-    /// to load normally return NULL. To specify a handler for the resource return
-    /// a cef_resource_handler_t object. The |request| object should not be
-    /// modified in this callback.
-    ///
-    pub get_resource_handler: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_request_handler_t,
-            browser: *mut _cef_browser_t,
-            frame: *mut _cef_frame_t,
-            request: *mut _cef_request_t,
-        ) -> *mut _cef_resource_handler_t,
-    >,
-    ///
-    /// Called on the IO thread when a resource load is redirected. The |request|
-    /// parameter will contain the old URL and other request-related information.
-    /// The |response| parameter will contain the response that resulted in the
-    /// redirect. The |new_url| parameter will contain the new URL and can be
-    /// changed if desired. The |request| object cannot be modified in this
-    /// callback.
-    ///
-    pub on_resource_redirect: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_request_handler_t,
-            browser: *mut _cef_browser_t,
-            frame: *mut _cef_frame_t,
-            request: *mut _cef_request_t,
-            response: *mut _cef_response_t,
-            new_url: *mut cef_string_t,
-        ),
-    >,
-    ///
-    /// Called on the IO thread when a resource response is received. To allow the
-    /// resource to load normally return false (0). To redirect or retry the
-    /// resource modify |request| (url, headers or post body) and return true (1).
-    /// The |response| object cannot be modified in this callback.
-    ///
-    pub on_resource_response: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_request_handler_t,
-            browser: *mut _cef_browser_t,
-            frame: *mut _cef_frame_t,
-            request: *mut _cef_request_t,
-            response: *mut _cef_response_t,
-        ) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Called on the IO thread to optionally filter resource response content.
-    /// |request| and |response| represent the request and response respectively
-    /// and cannot be modified in this callback.
-    ///
-    pub get_resource_response_filter: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_request_handler_t,
-            browser: *mut _cef_browser_t,
-            frame: *mut _cef_frame_t,
-            request: *mut _cef_request_t,
-            response: *mut _cef_response_t,
-        ) -> *mut _cef_response_filter_t,
-    >,
-    ///
-    /// Called on the IO thread when a resource load has completed. |request| and
-    /// |response| represent the request and response respectively and cannot be
-    /// modified in this callback. |status| indicates the load completion status.
-    /// |received_content_length| is the number of response bytes actually read.
-    ///
-    pub on_resource_load_complete: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_request_handler_t,
-            browser: *mut _cef_browser_t,
-            frame: *mut _cef_frame_t,
-            request: *mut _cef_request_t,
-            response: *mut _cef_response_t,
-            status: cef_urlrequest_status_t,
-            received_content_length: int64,
-        ),
-    >,
-    ///
-    /// Called on the IO thread when the browser needs credentials from the user.
-    /// |isProxy| indicates whether the host is a proxy server. |host| contains the
-    /// hostname and |port| contains the port number. |realm| is the realm of the
-    /// challenge and may be NULL. |scheme| is the authentication scheme used, such
-    /// as "basic" or "digest", and will be NULL if the source of the request is an
-    /// FTP server. Return true (1) to continue the request and call
-    /// cef_auth_callback_t::cont() either in this function or at a later time when
-    /// the authentication information is available. Return false (0) to cancel the
-    /// request immediately.
-    ///
-    pub get_auth_credentials: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_request_handler_t,
-            browser: *mut _cef_browser_t,
-            frame: *mut _cef_frame_t,
-            isProxy: ::std::os::raw::c_int,
-            host: *const cef_string_t,
-            port: ::std::os::raw::c_int,
-            realm: *const cef_string_t,
-            scheme: *const cef_string_t,
-            callback: *mut _cef_auth_callback_t,
-        ) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Called on the IO thread before sending a network request with a "Cookie"
-    /// request header. Return true (1) to allow cookies to be included in the
-    /// network request or false (0) to block cookies. The |request| object should
-    /// not be modified in this callback.
-    ///
-    pub can_get_cookies: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_request_handler_t,
-            browser: *mut _cef_browser_t,
-            frame: *mut _cef_frame_t,
-            request: *mut _cef_request_t,
-        ) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Called on the IO thread when receiving a network request with a "Set-
-    /// Cookie" response header value represented by |cookie|. Return true (1) to
-    /// allow the cookie to be stored or false (0) to block the cookie. The
-    /// |request| object should not be modified in this callback.
-    ///
-    pub can_set_cookie: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_request_handler_t,
-            browser: *mut _cef_browser_t,
-            frame: *mut _cef_frame_t,
-            request: *mut _cef_request_t,
-            cookie: *const _cef_cookie_t,
-        ) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Called on the IO thread when JavaScript requests a specific storage quota
-    /// size via the webkitStorageInfo.requestQuota function. |origin_url| is the
-    /// origin of the page making the request. |new_size| is the requested quota
-    /// size in bytes. Return true (1) to continue the request and call
-    /// cef_request_tCallback::cont() either in this function or at a later time to
-    /// grant or deny the request. Return false (0) to cancel the request
-    /// immediately.
-    ///
-    pub on_quota_request: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_request_handler_t,
-            browser: *mut _cef_browser_t,
-            origin_url: *const cef_string_t,
-            new_size: int64,
-            callback: *mut _cef_request_callback_t,
-        ) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Called on the UI thread to handle requests for URLs with an unknown
-    /// protocol component. Set |allow_os_execution| to true (1) to attempt
-    /// execution via the registered OS protocol handler, if any. SECURITY WARNING:
-    /// YOU SHOULD USE THIS METHOD TO ENFORCE RESTRICTIONS BASED ON SCHEME, HOST OR
-    /// OTHER URL ANALYSIS BEFORE ALLOWING OS EXECUTION.
-    ///
-    pub on_protocol_execution: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_request_handler_t,
-            browser: *mut _cef_browser_t,
-            url: *const cef_string_t,
-            allow_os_execution: *mut ::std::os::raw::c_int,
-        ),
-    >,
-    ///
-    /// Called on the UI thread to handle requests for URLs with an invalid SSL
-    /// certificate. Return true (1) and call cef_request_tCallback::cont() either
-    /// in this function or at a later time to continue or cancel the request.
-    /// Return false (0) to cancel the request immediately. If
-    /// CefSettings.ignore_certificate_errors is set all invalid certificates will
-    /// be accepted without calling this function.
-    ///
-    pub on_certificate_error: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_request_handler_t,
-            browser: *mut _cef_browser_t,
-            cert_error: cef_errorcode_t,
-            request_url: *const cef_string_t,
-            ssl_info: *mut _cef_sslinfo_t,
-            callback: *mut _cef_request_callback_t,
-        ) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Called on the UI thread when a client certificate is being requested for
-    /// authentication. Return false (0) to use the default behavior and
-    /// automatically select the first certificate available. Return true (1) and
-    /// call cef_select_client_certificate_callback_t::Select either in this
-    /// function or at a later time to select a certificate. Do not call Select or
-    /// call it with NULL to continue without using any certificate. |isProxy|
-    /// indicates whether the host is an HTTPS proxy or the origin server. |host|
-    /// and |port| contains the hostname and port of the SSL server. |certificates|
-    /// is the list of certificates to choose from; this list has already been
-    /// pruned by Chromium so that it only contains certificates from issuers that
-    /// the server trusts.
-    ///
-    pub on_select_client_certificate: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_request_handler_t,
-            browser: *mut _cef_browser_t,
-            isProxy: ::std::os::raw::c_int,
-            host: *const cef_string_t,
-            port: ::std::os::raw::c_int,
-            certificatesCount: usize,
-            certificates: *const *mut _cef_x509certificate_t,
-            callback: *mut _cef_select_client_certificate_callback_t,
-        ) -> ::std::os::raw::c_int,
-    >,
-    ///
-    /// Called on the browser process UI thread when a plugin has crashed.
-    /// |plugin_path| is the path of the plugin that crashed.
-    ///
-    pub on_plugin_crashed: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_request_handler_t,
-            browser: *mut _cef_browser_t,
-            plugin_path: *const cef_string_t,
-        ),
-    >,
-    ///
-    /// Called on the browser process UI thread when the render view associated
-    /// with |browser| is ready to receive/handle IPC messages in the render
-    /// process.
-    ///
-    pub on_render_view_ready: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_request_handler_t, browser: *mut _cef_browser_t),
-    >,
-    ///
-    /// Called on the browser process UI thread when the render process terminates
-    /// unexpectedly. |status| indicates how the process terminated.
-    ///
-    pub on_render_process_terminated: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_request_handler_t,
-            browser: *mut _cef_browser_t,
-            status: cef_termination_status_t,
-        ),
-    >,
-}
-///
-/// Implement this structure to provide handler implementations.
-///
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _cef_client_t {
-    ///
-    /// Base structure.
-    ///
-    pub base: cef_base_ref_counted_t,
-    ///
-    /// Return the handler for context menus. If no handler is provided the default
-    /// implementation will be used.
-    ///
-    pub get_context_menu_handler: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_client_t) -> *mut _cef_context_menu_handler_t,
-    >,
-    ///
-    /// Return the handler for dialogs. If no handler is provided the default
-    /// implementation will be used.
-    ///
-    pub get_dialog_handler: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_client_t) -> *mut _cef_dialog_handler_t,
-    >,
-    ///
-    /// Return the handler for browser display state events.
-    ///
-    pub get_display_handler: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_client_t) -> *mut _cef_display_handler_t,
-    >,
-    ///
-    /// Return the handler for download events. If no handler is returned downloads
-    /// will not be allowed.
-    ///
-    pub get_download_handler: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_client_t) -> *mut _cef_download_handler_t,
-    >,
-    ///
-    /// Return the handler for drag events.
-    ///
-    pub get_drag_handler: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_client_t) -> *mut _cef_drag_handler_t,
-    >,
-    ///
-    /// Return the handler for find result events.
-    ///
-    pub get_find_handler: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_client_t) -> *mut _cef_find_handler_t,
-    >,
-    ///
-    /// Return the handler for focus events.
-    ///
-    pub get_focus_handler: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_client_t) -> *mut _cef_focus_handler_t,
-    >,
-    ///
-    /// Return the handler for JavaScript dialogs. If no handler is provided the
-    /// default implementation will be used.
-    ///
-    pub get_jsdialog_handler: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_client_t) -> *mut _cef_jsdialog_handler_t,
-    >,
-    ///
-    /// Return the handler for keyboard events.
-    ///
-    pub get_keyboard_handler: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_client_t) -> *mut _cef_keyboard_handler_t,
-    >,
-    ///
-    /// Return the handler for browser life span events.
-    ///
-    pub get_life_span_handler: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_client_t) -> *mut _cef_life_span_handler_t,
-    >,
-    ///
-    /// Return the handler for browser load status events.
-    ///
-    pub get_load_handler: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_client_t) -> *mut _cef_load_handler_t,
-    >,
-    ///
-    /// Return the handler for off-screen rendering events.
-    ///
-    pub get_render_handler: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_client_t) -> *mut _cef_render_handler_t,
-    >,
-    ///
-    /// Return the handler for browser request events.
-    ///
-    pub get_request_handler: ::std::option::Option<
-        unsafe extern "C" fn(self_: *mut _cef_client_t) -> *mut _cef_request_handler_t,
-    >,
-    ///
-    /// Called when a new message is received from a different process. Return true
-    /// (1) if the message was handled or false (0) otherwise. Do not keep a
-    /// reference to or attempt to access the message outside of this callback.
-    ///
-    pub on_process_message_received: ::std::option::Option<
-        unsafe extern "C" fn(
-            self_: *mut _cef_client_t,
-            browser: *mut _cef_browser_t,
-            source_process: cef_process_id_t,
-            message: *mut _cef_process_message_t,
-        ) -> ::std::os::raw::c_int,
-    >,
-}
-///
 /// Structure used to make a URL request. URL requests are not associated with a
 /// browser instance so no cef_client_t callbacks will be executed. URL requests
 /// can be created on any valid CEF thread in either the browser or render
@@ -12673,19 +13803,18 @@ pub struct _cef_urlrequest_t {
 pub type cef_urlrequest_t = _cef_urlrequest_t;
 extern "C" {
     ///
-    /// Create a new URL request. Only GET, POST, HEAD, DELETE and PUT request
-    /// functions are supported. Multiple post data elements are not supported and
-    /// elements of type PDE_TYPE_FILE are only supported for requests originating
-    /// from the browser process. Requests originating from the render process will
-    /// receive the same handling as requests originating from Web content -- if the
-    /// response contains Content-Disposition or Mime-Type header values that would
-    /// not normally be rendered then the response may receive special handling
-    /// inside the browser (for example, via the file download code path instead of
-    /// the URL request code path). The |request| object will be marked as read-only
-    /// after calling this function. In the browser process if |request_context| is
-    /// NULL the global request context will be used. In the render process
-    /// |request_context| must be NULL and the context associated with the current
-    /// renderer process' browser will be used.
+    /// Create a new URL request that is not associated with a specific browser or
+    /// frame. Use cef_frame_t::CreateURLRequest instead if you want the request to
+    /// have this association, in which case it may be handled differently (see
+    /// documentation on that function). A request created with this function may
+    /// only originate from the browser process, and will behave as follows:
+    ///   - It may be intercepted by the client via CefResourceRequestHandler or
+    ///     CefSchemeHandlerFactory.
+    ///   - POST data may only contain only a single element of type PDE_TYPE_FILE
+    ///     or PDE_TYPE_BYTES.
+    ///   - If |request_context| is empty the global request context will be used.
+    ///
+    /// The |request| object will be marked as read-only after calling this function.
     ///
     pub fn cef_urlrequest_create(
         request: *mut _cef_request_t,
@@ -12758,9 +13887,11 @@ pub struct _cef_urlrequest_client_t {
     /// |isProxy| indicates whether the host is a proxy server. |host| contains the
     /// hostname and |port| contains the port number. Return true (1) to continue
     /// the request and call cef_auth_callback_t::cont() when the authentication
-    /// information is available. Return false (0) to cancel the request. This
-    /// function will only be called for requests initiated from the browser
-    /// process.
+    /// information is available. If the request has an associated browser/frame
+    /// then returning false (0) will result in a call to GetAuthCredentials on the
+    /// cef_request_handler_t associated with that browser, if any. Otherwise,
+    /// returning false (0) will cancel the request immediately. This function will
+    /// only be called for requests initiated from the browser process.
     ///
     pub get_auth_credentials: ::std::option::Option<
         unsafe extern "C" fn(
