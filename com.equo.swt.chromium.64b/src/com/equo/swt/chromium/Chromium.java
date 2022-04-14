@@ -115,7 +115,7 @@ import com.equo.swt.internal.chromium.lib.cef_string_visitor_t;
 
 class Chromium extends WebBrowser {
   private static final String DATA_TEXT_URL = "data:text/html;base64,";
-  private static final String VERSION = "6900";
+  private static final String VERSION = "10000";
   private static final String CEFVERSION = "3497";
   private static final String SHARED_LIB_V = "chromium_swt_" + VERSION;
   private static final String JNI_LIB_V = "swt-chromium-" + VERSION;
