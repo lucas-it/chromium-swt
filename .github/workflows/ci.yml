@@ -100,7 +100,7 @@ jobs:
           curl https://cef-builds.spotifycdn.com/cef_binary_100.0.19%2Bgcd1e788%2Bchromium-100.0.4896.88_windows32_minimal.tar.bz2 -o cef_win32_x86.tar.bz2
           curl https://repo.maven.apache.org/maven2/com/google/googlejavaformat/google-java-format/1.6/google-java-format-1.6-all-deps.jar -o ../google-java-format-all-deps.jar
           7z x cef_win32_x86.tar.bz2 -o"cef_win32_x86.tar"
-          7z x cef_win32_x86.tar/cef_win32.tar -o"cef_win32_x86"
+          7z x cef_win32_x86.tar/cef_win32_x86.tar -o"cef_win32_x86"
           mv cef_win32_x86/cef_*/* cef_win32_x86
           rustup target add i686-pc-windows-msvc
 
